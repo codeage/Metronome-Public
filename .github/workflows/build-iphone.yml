@@ -1,93 +1,45 @@
 ﻿name: Build Metronome for iOS
-
 on:
   workflow_dispatch:
-    inputs:
-      source_sha:
-        description: Exact reviewed main commit, for a release handoff
-        type: string
-      recipient:
-        description: One-time public encryption recipient, for a release handoff
-        type: string
-      build_number:
-        description: Optional TestFlight build number
-        type: string
-      release_sequence:
-        description: Private release run number, for automatic versioning
-        type: string
-
 permissions:
   contents: read
-
 jobs:
-  build:
-    if: github.ref == 'refs/heads/main'
+  upload:
+    name: Upload signed Build 29924095 to TestFlight
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          ref: ${{ inputs.source_sha || github.sha }}
-
-      - name: Compile the app and Live Activity extension
+      - name: Decrypt, verify and upload to App Store Connect
         env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          RECIPIENT: ${{ inputs.recipient }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
-          RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
+          RELEASE_AGE_KEY: ${{ secrets.METRONOME_TF_INPUT_29924095_D8DEB1 }}
         run: |
           set -euo pipefail
+          : "${RELEASE_AGE_KEY:?The one-time upload key is missing}"
+          work=$(mktemp -d "$RUNNER_TEMP/metronome-delivery.XXXXXX")
+          trap 'rm -rf -- "$work"' EXIT
+          umask 077
+          printf '%s\n' "$RELEASE_AGE_KEY" > "$work/key"
+          unset RELEASE_AGE_KEY
+          curl -fsSL --retry 3 -o "$work/age.tar.gz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
+          printf '%s  %s\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 "$work/age.tar.gz" | shasum -a 256 --check
+          tar -xzf "$work/age.tar.gz" -C "$work" age/age
+          ipa="$work/Metronome-29924095-TestFlight.ipa"
+          "$work/age/age" --decrypt --identity "$work/key" --output "$ipa" signed-ipa.age
+          printf '%s  %s\n' f5a5f0d46f4a360a4f0f620b170136d8c2ddef5ae57275936d2f0a1e2460a674 "$ipa" | shasum -a 256 --check
+          unzip -tq "$ipa"
           xcodebuild -version
-          build_settings=()
-          if [[ -n "$RECIPIENT" ]]; then
-            [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]] || { echo 'Public main changed during dispatch'; exit 1; }
-            [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]] || { echo 'Invalid encryption recipient'; exit 1; }
-            if [[ -z "$BUILD_NUMBER" ]]; then
-              [[ "$RELEASE_SEQUENCE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid release sequence'; exit 1; }
-              base=$(sed -nE 's/^[[:space:]]*CURRENT_PROJECT_VERSION = ([0-9]+);/\1/p' PianoMetronome.xcodeproj/project.pbxproj | sort -un | tail -n 1)
-              [[ "$base" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid project build number'; exit 1; }
-              BUILD_NUMBER=$((base + RELEASE_SEQUENCE))
-            fi
-            [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
-            build_settings=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
+          APPLE_APP_SPECIFIC_PASSWORD=$("$work/age/age" --decrypt --identity "$work/key" auth.age)
+          printf '::add-mask::%s\n' "$APPLE_APP_SPECIFIC_PASSWORD"
+          export APPLE_APP_SPECIFIC_PASSWORD
+          rm -f -- "$work/key"
+          xcrun altool --upload-app --type ios --file "$ipa" --username '6474024@qq.com' \
+            --password '@env:APPLE_APP_SPECIFIC_PASSWORD' --output-format json | tee "$work/upload.json"
+          delivery=$(jq -r '.. | objects | to_entries[] | select(.key | test("^delivery[-_ ]?(id|uuid)$";"i")) | .value | strings' "$work/upload.json" | head -n 1)
+          if [[ "$delivery" =~ ^[[:xdigit:]-]{36}$ ]]; then
+            xcrun altool --build-status --delivery-id "$delivery" --wait \
+              --provider-public-id '69a6de76-d94e-47e3-e053-5b8c7c11a4d1' \
+              --username '6474024@qq.com' --password '@env:APPLE_APP_SPECIFIC_PASSWORD' --output-format normal
           fi
-          xcodebuild \
-            -project PianoMetronome.xcodeproj \
-            -scheme PianoMetronome \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/MetronomeBuild" \
-            CODE_SIGNING_ALLOWED=NO ${build_settings[@]+"${build_settings[@]}"} build
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          test -x "$app/PianoMetronome"
-          test -x "$app/PlugIns/MetronomeActivity.appex/MetronomeActivity"
-
-      - name: Encrypt compiled IPA for Windows
-        if: ${{ inputs.recipient != '' }}
-        env:
-          RECIPIENT: ${{ inputs.recipient }}
-        run: |
-          set -euo pipefail
-          transport=$(mktemp -d "$RUNNER_TEMP/metronome-transport.XXXXXX")
-          trap 'rm -rf "$transport"' EXIT
-          tgz="$transport/age.tar.gz"
-          curl -fsSL --retry 3 -o "$tgz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
-          printf '%s  %s\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 "$tgz" | shasum -a 256 --check
-          tar -xzf "$tgz" -C "$transport" age/age
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          mkdir "$transport/Payload"
-          ditto "$app" "$transport/Payload/PianoMetronome.app"
-          cd "$transport"
-          zip -qr unsigned.ipa Payload
-          unzip -tq unsigned.ipa
-          "$transport/age/age" --encrypt --recipient "$RECIPIENT" --output "$RUNNER_TEMP/metronome-build.age" unsigned.ipa
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ inputs.recipient != '' }}
-        with:
-          name: metronome-encrypted-build
-          path: ${{ runner.temp }}/metronome-build.age
-          compression-level: 0
-          if-no-files-found: error
-          retention-days: 1
