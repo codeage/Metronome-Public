@@ -33,6 +33,9 @@ jobs:
           xcodebuild -version
           APPLE_APP_SPECIFIC_PASSWORD=$("$work/age/age" --decrypt --identity "$work/key" auth.age)
           printf '::add-mask::%s\n' "$APPLE_APP_SPECIFIC_PASSWORD"
+          APPLE_APP_SPECIFIC_PASSWORD=${APPLE_APP_SPECIFIC_PASSWORD#$'\xef\xbb\xbf'}
+          printf '::add-mask::%s\n' "$APPLE_APP_SPECIFIC_PASSWORD"
+          [[ "$APPLE_APP_SPECIFIC_PASSWORD" =~ ^[a-z]{4}(-[a-z]{4}){3}$ ]] || { echo 'Unexpected app-specific password format'; exit 1; }
           export APPLE_APP_SPECIFIC_PASSWORD
           rm -f -- "$work/key"
           xcrun altool --upload-app --type ios --file "$ipa" --username '6474024@qq.com' \
