@@ -1,0 +1,31 @@
+﻿name: Build Metronome for iOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Compile the app and Live Activity extension
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcodebuild \
+            -project PianoMetronome.xcodeproj \
+            -scheme PianoMetronome \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/MetronomeBuild" \
+            CODE_SIGNING_ALLOWED=NO build
+          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
+          test -x "$app/PianoMetronome"
+          test -x "$app/PlugIns/MetronomeActivity.appex/MetronomeActivity"

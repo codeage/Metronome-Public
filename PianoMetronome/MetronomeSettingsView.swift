@@ -1,0 +1,261 @@
+﻿import SwiftUI
+
+@MainActor
+extension Metronome {
+    func perform(_ action: () throws -> Void) {
+        do { try action() } catch { self.error = error.localizedDescription }
+    }
+
+    func performTempo(_ bpm: Int) {
+        perform { try setTempo(bpm) }
+    }
+
+    func setting<Value>(_ key: WritableKeyPath<BeatSettings, Value>) -> Binding<Value> {
+        Binding {
+            self.settings[keyPath: key]
+        } set: { value in
+            var next = self.settings
+            next[keyPath: key] = value
+            self.perform { try self.update(next) }
+        }
+    }
+
+    func option<Value>(_ key: WritableKeyPath<MetronomePreferences, Value>) -> Binding<Value> {
+        Binding {
+            self.preferences[keyPath: key]
+        } set: { value in
+            var next = self.preferences
+            next[keyPath: key] = value
+            self.perform { try self.changePreferences(next) }
+        }
+    }
+}
+
+@MainActor
+struct MeterEditor: View {
+    @ObservedObject var metronome: Metronome
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("常用拍号") {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 70), spacing: 8)], spacing: 8) {
+                        ForEach(MeterOption.allCases) { meter in
+                            let selected = metronome.settings.meter == meter.rawValue
+                            Button {
+                                var settings = metronome.settings
+                                meter.apply(to: &settings)
+                                metronome.perform { try metronome.update(settings) }
+                                dismiss()
+                            } label: {
+                                Text(meter.rawValue)
+                                    .font(.headline.monospacedDigit())
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .background(selected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12),
+                                                in: RoundedRectangle(cornerRadius: 9))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                Section("自定义拍号") {
+                    Stepper("每小节 \(metronome.settings.beats) 拍",
+                            value: metronome.setting(\.beats), in: metronome.preferences.beatsRange)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("拍号分母")
+                        Picker("拍号分母", selection: metronome.setting(\.unit)) {
+                            ForEach(BeatSettings.units, id: \.self) { Text("\($0)").tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("拍号分母")
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .navigationTitle("拍号")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
+            }
+        }
+    }
+}
+
+@MainActor
+struct MetronomeSettingsView: View {
+    @ObservedObject var metronome: Metronome
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                audioSection
+                latencySection
+                rangeSection
+                trainingSection
+                ghostSection
+                feedbackSection
+                Section {
+                    NavigationLink("曲目预设") { MetronomePresetsView(metronome: metronome) }
+                }
+            }
+            .navigationTitle("设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
+            }
+        }
+    }
+
+    private var audioSection: some View {
+        Section("音频") {
+            Picker("音色", selection: metronome.setting(\.sound)) {
+                ForEach(BeatSound.allCases) { Text($0.title).tag($0) }
+            }
+            VStack(alignment: .leading) {
+                Text("音量")
+                Slider(value: metronome.option(\.volume), in: 0...1)
+                    .accessibilityLabel("音量")
+            }
+            VStack(alignment: .leading) {
+                Text("声道平衡")
+                Slider(value: metronome.option(\.balance), in: -1...1, step: 0.05) {
+                    Text("声道平衡")
+                } minimumValueLabel: {
+                    Text("左")
+                } maximumValueLabel: {
+                    Text("右")
+                }
+            }
+            Toggle("与其他 App 混音", isOn: metronome.option(\.mixWithOthers))
+        }
+    }
+
+    private var latencySection: some View {
+        Section("输出延迟校准") {
+            LabeledContent("当前输出", value: metronome.outputName)
+            LabeledContent("系统输出延迟") {
+                Text("\(metronome.latencyMilliseconds, specifier: "%.1f") 毫秒").monospacedDigit()
+            }
+            Stepper("手动补偿 \(metronome.preferences.offsetMilliseconds) 毫秒",
+                    value: metronome.option(\.offsetMilliseconds), in: -500...500)
+            Text("正值让拍点提示延后，负值让它提前。蓝牙输出时可边听边调。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var rangeSection: some View {
+        Section("速度与拍号") {
+            Toggle("专业速度范围（20–300）", isOn: metronome.option(\.professionalTempo))
+            Toggle("显示意大利语速度标记", isOn: metronome.option(\.showTempoMark))
+            Toggle("扩展至每小节 32 拍", isOn: metronome.option(\.extendedMeter))
+        }
+    }
+
+    private var trainingSection: some View {
+        let trainer = metronome.preferences.trainer
+        let range = metronome.preferences.tempoRange
+        return Section("渐快训练") {
+            Toggle("开启渐快训练", isOn: metronome.option(\.trainer.enabled))
+            if trainer.enabled {
+                Stepper("起始速度 \(trainer.start)", value: metronome.option(\.trainer.start), in: range)
+                Stepper("目标速度 \(trainer.target)", value: metronome.option(\.trainer.target),
+                        in: trainer.start...range.upperBound)
+                Stepper("每次加快 \(trainer.step) 拍", value: metronome.option(\.trainer.step), in: 1...50)
+                Stepper("每 \(trainer.bars) 小节递增", value: metronome.option(\.trainer.bars), in: 1...64)
+            }
+        }
+    }
+
+    private var ghostSection: some View {
+        let ghost = metronome.preferences.ghost
+        return Section("间歇静音") {
+            Toggle("开启间歇静音", isOn: metronome.option(\.ghost.enabled))
+            if ghost.enabled {
+                Stepper("发声 \(ghost.audible) 小节", value: metronome.option(\.ghost.audible), in: 1...64)
+                Stepper("静音 \(ghost.silent) 小节", value: metronome.option(\.ghost.silent), in: 1...64)
+            }
+        }
+    }
+
+    private var feedbackSection: some View {
+        Section("反馈与屏幕") {
+            Toggle("播放时保持屏幕常亮", isOn: metronome.option(\.keepAwake))
+            Toggle("圆环随拍闪烁", isOn: metronome.option(\.flash))
+            Toggle("节拍触觉反馈", isOn: metronome.option(\.haptics))
+                .disabled(!BeatHaptics.available)
+        }
+    }
+}
+
+@MainActor
+private struct MetronomePresetsView: View {
+    @ObservedObject var metronome: Metronome
+    @Environment(\.dismiss) private var dismiss
+    @State private var editing: UUID?
+    @State private var pendingDeletion: MetronomePreset?
+    @State private var name = ""
+    @State private var naming = false
+
+    var body: some View {
+        List {
+            Section {
+                Button("保存当前设置", systemImage: "plus") { edit(nil) }
+            }
+            ForEach(metronome.presets) { preset in
+                Button {
+                    do {
+                        try metronome.loadPreset(preset)
+                        dismiss()
+                    } catch {
+                        metronome.error = error.localizedDescription
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(preset.name)
+                        Text("\(preset.settings.bpm) · \(preset.settings.meter) · \(preset.settings.rhythm.title)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .swipeActions(allowsFullSwipe: false) {
+                    Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
+                    Button("重命名", systemImage: "pencil") { edit(preset) }
+                        .tint(.blue)
+                }
+                .contextMenu {
+                    Button("重命名", systemImage: "pencil") { edit(preset) }
+                    Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
+                }
+            }
+        }
+        .navigationTitle("曲目预设")
+        .alert(editing == nil ? "保存曲目" : "重命名曲目", isPresented: $naming) {
+            TextField("曲目名称", text: $name)
+            Button("取消", role: .cancel) {}
+            Button("保存") {
+                if let editing { metronome.renamePreset(editing, to: name) }
+                else { metronome.savePreset(named: name) }
+            }
+            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .confirmationDialog("删除曲目预设？", isPresented: Binding(
+            get: { pendingDeletion != nil },
+            set: { if !$0 { pendingDeletion = nil } }
+        ), presenting: pendingDeletion) { preset in
+            Button("删除", role: .destructive) { metronome.deletePreset(preset.id) }
+        } message: { preset in
+            Text(preset.name)
+        }
+    }
+
+    private func edit(_ preset: MetronomePreset?) {
+        editing = preset?.id
+        name = preset?.name ?? ""
+        naming = true
+    }
+}
