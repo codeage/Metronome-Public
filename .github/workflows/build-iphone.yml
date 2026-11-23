@@ -28,7 +28,7 @@ jobs:
           chmod 700 "$build_scope"
           cd "$build_scope"
           curl -fsSL --retry 3 -o age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
-          printf '%s  age.tar.gz\n' e2020b073c44f692685a24d6abc378817eb81afaaf49fd0531ef8565f767f2f5 | shasum -a 256 --check
+          printf '%s  age.tar.gz\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 | shasum -a 256 --check
           tar -xzf age.tar.gz age/age
           mkdir source result
           printf '%s\n' "$INPUT_IDENTITY" > identity.txt
