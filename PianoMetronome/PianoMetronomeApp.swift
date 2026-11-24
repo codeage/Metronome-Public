@@ -8,6 +8,8 @@ struct PianoMetronomeApp: App {
     @StateObject private var metronome = Metronome.shared
     @StateObject private var subscription = Metronome.shared.subscription
     @Environment(\.scenePhase) private var scenePhase
+    @State private var didCheckForUpdate = false
+    @State private var availableUpdate: MetronomeUpdate?
 
     init() { MetronomeShortcuts.updateAppShortcutParameters() }
 
@@ -27,9 +29,36 @@ struct PianoMetronomeApp: App {
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 metronome.setForeground(phase == .active)
+                if phase == .active && !didCheckForUpdate {
+                    didCheckForUpdate = true
+                    Task { availableUpdate = await MetronomeUpdate.checkAtLaunch() }
+                }
             }
             .task(id: scenePhase) {
                 if scenePhase == .active { await subscription.refresh() }
+            }
+            .alert("有新版本", isPresented: Binding(
+                get: { availableUpdate != nil },
+                set: { if !$0 { availableUpdate = nil } }
+            ), presenting: availableUpdate) { update in
+                Button(update.destination.buttonTitle) { openUpdate(update.destination) }
+                Button("稍后", role: .cancel) {}
+            } message: { update in
+                Text("节拍器 \(update.version) 已可更新。")
+            }
+        }
+    }
+
+    private func openUpdate(_ destination: MetronomeUpdate.Destination) {
+        switch destination {
+        case .appStore(let url):
+            UIApplication.shared.open(url)
+        case .testFlight:
+            guard let appURL = URL(string: "itms-beta://"),
+                  let fallback = URL(string: "https://testflight.apple.com/") else { return }
+            Task {
+                let opened = await UIApplication.shared.open(appURL)
+                if !opened { _ = await UIApplication.shared.open(fallback) }
             }
         }
     }
