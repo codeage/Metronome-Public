@@ -1,93 +1,71 @@
 ﻿name: Build Metronome for iOS
-
 on:
   workflow_dispatch:
     inputs:
-      source_sha:
-        description: Exact reviewed main commit, for a release handoff
+      build_number:
+        required: true
         type: string
       recipient:
-        description: One-time public encryption recipient, for a release handoff
+        description: One-time public recipient for the result
+        required: true
         type: string
-      build_number:
-        description: Optional TestFlight build number
-        type: string
-      release_sequence:
-        description: Private release run number, for automatic versioning
-        type: string
-
 permissions:
   contents: read
-
 jobs:
-  build:
-    if: github.ref == 'refs/heads/main'
+  device-build:
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          ref: ${{ inputs.source_sha || github.sha }}
-
-      - name: Compile the app and Live Activity extension
+      - name: Compile encrypted device build
         env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          RECIPIENT: ${{ inputs.recipient }}
           BUILD_NUMBER: ${{ inputs.build_number }}
-          RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
+          INPUT_IDENTITY: ${{ secrets.METRONOME_DEVICE_INPUT_B6CC5B1FB917 }}
+          RESULT_RECIPIENT: ${{ inputs.recipient }}
         run: |
           set -euo pipefail
-          xcodebuild -version
-          build_settings=()
-          if [[ -n "$RECIPIENT" ]]; then
-            [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]] || { echo 'Public main changed during dispatch'; exit 1; }
-            [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]] || { echo 'Invalid encryption recipient'; exit 1; }
-            if [[ -z "$BUILD_NUMBER" ]]; then
-              [[ "$RELEASE_SEQUENCE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid release sequence'; exit 1; }
-              base=$(sed -nE 's/^[[:space:]]*CURRENT_PROJECT_VERSION = ([0-9]+);/\1/p' PianoMetronome.xcodeproj/project.pbxproj | sort -un | tail -n 1)
-              [[ "$base" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid project build number'; exit 1; }
-              BUILD_NUMBER=$((base + RELEASE_SEQUENCE))
-            fi
-            [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
-            build_settings=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,7}$ ]]
+          [[ "$RESULT_RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]]
+          build_scope="$(mktemp -d "$RUNNER_TEMP/metronome-device.XXXXXX")"
+          trap 'rm -rf "$build_scope"' EXIT
+          chmod 700 "$build_scope"
+          cd "$build_scope"
+          curl -fsSL --retry 3 -o age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
+          printf '%s  age.tar.gz\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 | shasum -a 256 --check
+          tar -xzf age.tar.gz age/age
+          mkdir source result
+          printf '%s\n' "$INPUT_IDENTITY" > identity.txt
+          ./age/age --decrypt --identity identity.txt --output source.tar.gz "$GITHUB_WORKSPACE/device-build.age"
+          rm -f identity.txt
+          unset INPUT_IDENTITY
+          tar -xzf source.tar.gz -C source
+          status=0
+          (
+            cd source
+            xcodebuild -version
+            xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
+              -configuration Release -destination 'generic/platform=iOS' \
+              -derivedDataPath "$build_scope/derived" CODE_SIGNING_ALLOWED=NO "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" build
+          ) > result/build.log 2>&1 || status=$?
+          if [[ "$status" == 0 ]]; then
+            app="$build_scope/derived/Build/Products/Release-iphoneos/PianoMetronome.app"
+            test -x "$app/PianoMetronome"
+            test -x "$app/PlugIns/MetronomeActivity.appex/MetronomeActivity"
+            mkdir Payload
+            ditto "$app" Payload/PianoMetronome.app
+            zip -qr result/unsigned.ipa Payload
+            unzip -tq result/unsigned.ipa
           fi
-          xcodebuild \
-            -project PianoMetronome.xcodeproj \
-            -scheme PianoMetronome \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/MetronomeBuild" \
-            CODE_SIGNING_ALLOWED=NO ${build_settings[@]+"${build_settings[@]}"} build
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          test -x "$app/PianoMetronome"
-          test -x "$app/PlugIns/MetronomeActivity.appex/MetronomeActivity"
-
-      - name: Encrypt compiled IPA for Windows
-        if: ${{ inputs.recipient != '' }}
-        env:
-          RECIPIENT: ${{ inputs.recipient }}
-        run: |
-          set -euo pipefail
-          transport=$(mktemp -d "$RUNNER_TEMP/metronome-transport.XXXXXX")
-          trap 'rm -rf "$transport"' EXIT
-          tgz="$transport/age.tar.gz"
-          curl -fsSL --retry 3 -o "$tgz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
-          printf '%s  %s\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 "$tgz" | shasum -a 256 --check
-          tar -xzf "$tgz" -C "$transport" age/age
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          mkdir "$transport/Payload"
-          ditto "$app" "$transport/Payload/PianoMetronome.app"
-          cd "$transport"
-          zip -qr unsigned.ipa Payload
-          unzip -tq unsigned.ipa
-          "$transport/age/age" --encrypt --recipient "$RECIPIENT" --output "$RUNNER_TEMP/metronome-build.age" unsigned.ipa
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ inputs.recipient != '' }}
+          tar -czf result.tar.gz -C result .
+          ./age/age --encrypt --recipient "$RESULT_RECIPIENT" --output "$RUNNER_TEMP/device-build-result.age" result.tar.gz
+          exit "$status"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
-          name: metronome-encrypted-build
-          path: ${{ runner.temp }}/metronome-build.age
-          compression-level: 0
+          name: metronome-encrypted-device-build
+          path: ${{ runner.temp }}/device-build-result.age
           if-no-files-found: error
+          compression-level: 0
           retention-days: 1
