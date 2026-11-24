@@ -44,7 +44,7 @@ final class MetronomeAudio {
     private let storage: RenderStorage
     private let engine = AVAudioEngine()
     private let session = AVAudioSession.sharedInstance()
-    private var loadedVoiceSounds: Set<BeatSound> = []
+    private var loadedVoice = false
 
     var isRunning: Bool { engine.isRunning }
     var outputLatency: TimeInterval { session.outputLatency }
@@ -112,21 +112,43 @@ final class MetronomeAudio {
     }
 
     private func loadVoiceIfNeeded(_ sound: BeatSound) {
-        guard let folder = sound.voiceFolder, let resources = Bundle.main.resourceURL,
-              loadedVoiceSounds.insert(sound).inserted else { return }
-        let directory = resources.appendingPathComponent("CountVoices", isDirectory: true)
-            .appendingPathComponent(folder, isDirectory: true)
-        for beat in 0..<32 {
-            let url = directory.appendingPathComponent(String(format: "%02d.wav", beat + 1))
-            guard let file = try? AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false),
-                  file.processingFormat.sampleRate == RenderStorage.sampleRate,
-                  file.processingFormat.channelCount == 1, (1...24_000).contains(file.length),
-                  let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                                frameCapacity: AVAudioFrameCount(file.length)) else { continue }
-            guard (try? file.read(into: buffer)) != nil, let samples = buffer.floatChannelData?[0] else { continue }
-            _ = metronome_load_voice_for_sound(storage.pointer, UInt32(sound.rawValue), UInt32(beat),
-                                               samples, buffer.frameLength)
+        guard sound == .voice, !loadedVoice, let resources = Bundle.main.resourceURL else { return }
+        loadedVoice = true
+        let root = resources.appendingPathComponent("CountVoices", isDirectory: true)
+        let preferred = (Locale.preferredLanguages.first ?? "en").lowercased()
+        let tags = preferred.split(whereSeparator: { $0 == "-" || $0 == "_" })
+        let language = String(tags.first ?? "en")
+        let aliases = ["nb": "no", "nn": "no", "tl": "fil", "iw": "he", "in": "id"]
+        let folder: String
+        if language == "zh", tags.contains("hk") || tags.contains("mo") {
+            folder = "yue"
+        } else if language == "zh", tags.contains("hant") || tags.contains("tw") {
+            folder = "zh-Hant"
+        } else {
+            folder = aliases[language] ?? language
         }
+        let local = root.appendingPathComponent(folder, isDirectory: true)
+        let english = root.appendingPathComponent("en", isDirectory: true)
+        let directory = FileManager.default.fileExists(atPath: local.path) ? local : english
+        for beat in 0..<32 {
+            let filename = String(format: "%02d.aac", beat + 1)
+            if !loadVoiceClip(directory.appendingPathComponent(filename), beat: beat), directory != english {
+                _ = loadVoiceClip(english.appendingPathComponent(filename), beat: beat)
+            }
+        }
+    }
+
+    private func loadVoiceClip(_ url: URL, beat: Int) -> Bool {
+        guard let file = try? AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false),
+              file.processingFormat.sampleRate == RenderStorage.sampleRate,
+              file.processingFormat.channelCount == 1,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 26_400),
+              (try? file.read(into: buffer)) != nil, let samples = buffer.floatChannelData?[0],
+              let first = (0..<Int(buffer.frameLength)).first(where: { abs(samples[$0]) > 0.012 })
+        else { return false }
+        let start = max(0, first - 96)
+        return metronome_load_voice(storage.pointer, UInt32(beat), samples.advanced(by: start),
+                                    buffer.frameLength - UInt32(start))
     }
 }
 
