@@ -52,8 +52,8 @@ jobs:
               BUILD_NUMBER=$((base + RELEASE_SEQUENCE))
             fi
           fi
-          if [[ -n "" ]]; then
-            [[ "" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
+          if [[ -n "$BUILD_NUMBER" ]]; then
+            [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
             build_settings=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
           fi
           xcodebuild \
