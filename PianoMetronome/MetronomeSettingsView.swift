@@ -224,7 +224,7 @@ struct BeatSoundMenu: View {
     var compactTitle = false
 
     var body: some View {
-        StableOptionMenu(title: "音色", selection: metronome.settings.sound.title,
+        StableOptionMenu(title: String(localized: "音色"), selection: metronome.settings.sound.title,
                          options: BeatSound.allCases.map(\.title), identifier: identifier,
                          compactTitle: compactTitle) { value in
             if let sound = BeatSound.allCases.first(where: { $0.title == value }) {
@@ -346,7 +346,7 @@ struct MetronomePresetsView: View {
             }
         }
         .navigationTitle("曲目预设")
-        .alert(editing == nil ? "保存曲目" : "重命名曲目", isPresented: $naming) {
+        .alert(editing == nil ? LocalizedStringKey("保存曲目") : LocalizedStringKey("重命名曲目"), isPresented: $naming) {
             TextField("曲目名称", text: $name)
             Button("取消", role: .cancel) {}
             Button("保存") {

@@ -1,0 +1,102 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "把 ${applicationName} 的拍号设为 ${meter}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set ${applicationName} to ${meter}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把 ${applicationName} 的拍號設為 ${meter}"
+          }
+        }
+      }
+    },
+    "把 ${applicationName} 的速度设为 ${tempo} 拍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set ${applicationName} tempo to ${tempo} beats per minute"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把 ${applicationName} 的速度設為 ${tempo} 拍"
+          }
+        }
+      }
+    },
+    "启动 ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start ${applicationName}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟動 ${applicationName}"
+          }
+        }
+      }
+    },
+    "设置 ${applicationName} 的拍号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set ${applicationName} time signature"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定 ${applicationName} 的拍號"
+          }
+        }
+      }
+    },
+    "设置 ${applicationName} 的速度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set ${applicationName} tempo"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定 ${applicationName} 的速度"
+          }
+        }
+      }
+    },
+    "停止 ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop ${applicationName}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止 ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

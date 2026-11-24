@@ -68,8 +68,14 @@ private struct PlaybackDetails: View {
     var body: some View {
         HStack(spacing: 8) {
             if showMeter { Text(state.meter).monospacedDigit() }
-            Text(state.rhythmName ?? (state.subdivision == 1 ? "无细分" : "每拍 \(state.subdivision) 等分"))
-            Text(state.accent ? "有首拍重音" : "无首拍重音")
+            if let rhythmName = state.rhythmName {
+                Text(verbatim: rhythmName)
+            } else if state.subdivision == 1 {
+                Text("无细分")
+            } else {
+                Text("每拍 \(state.subdivision) 等分")
+            }
+            Text(state.accent ? LocalizedStringKey("有首拍重音") : LocalizedStringKey("无首拍重音"))
         }
         .font(.caption)
         .accessibilityElement(children: .combine)

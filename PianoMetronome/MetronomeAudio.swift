@@ -115,7 +115,7 @@ final class MetronomeAudio {
         guard sound == .voice, !loadedVoice, let resources = Bundle.main.resourceURL else { return }
         loadedVoice = true
         let root = resources.appendingPathComponent("CountVoices", isDirectory: true)
-        let preferred = (Locale.preferredLanguages.first ?? "en").lowercased()
+        let preferred = (Bundle.main.preferredLocalizations.first ?? "en").lowercased()
         let tags = preferred.split(whereSeparator: { $0 == "-" || $0 == "_" })
         let language = String(tags.first ?? "en")
         let aliases = ["nb": "no", "nn": "no", "tl": "fil", "iw": "he", "in": "id"]

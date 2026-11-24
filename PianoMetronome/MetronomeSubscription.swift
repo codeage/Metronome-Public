@@ -175,12 +175,12 @@ struct MetronomeSubscriptionView: View {
                     .accessibilityAddTraits(.isHeader)
 
                 if !buyoutOnly {
-                    purchaseCard("年度订阅", price: annual.map { "\($0.displayPrice) / 年" }) {
+                    purchaseCard("年度订阅", price: annual.map { String(localized: "\($0.displayPrice) / 年") }) {
                         Text(showsFreeTrial
-                             ? "免费试用 7 天，之后按上方年费自动续订。如不想续订，请在试用结束至少 24 小时前取消。"
-                             : "按年自动续订，可在 App Store 管理或取消。")
+                             ? LocalizedStringKey("免费试用 7 天，之后按上方年费自动续订。如不想续订，请在试用结束至少 24 小时前取消。")
+                             : LocalizedStringKey("按年自动续订，可在 App Store 管理或取消。"))
                         if let annual {
-                            purchaseButton(showsFreeTrial ? "开始 7 天免费试用" : "订阅一年") {
+                            purchaseButton(showsFreeTrial ? LocalizedStringKey("开始 7 天免费试用") : LocalizedStringKey("订阅一年")) {
                                 Task { await buy(annual) }
                             }
                         }
@@ -270,7 +270,7 @@ struct MetronomeSubscriptionView: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private func purchaseButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func purchaseButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title).frame(maxWidth: .infinity)
         }
@@ -344,14 +344,14 @@ struct MetronomeSubscriptionView: View {
             case .success(let result):
                 let verified = await subscription.accept(result)
                 if !verified {
-                    message = "无法验证这笔购买。请稍后恢复购买。"
+                    message = String(localized: "无法验证这笔购买。请稍后恢复购买。")
                 }
             case .pending:
-                message = "购买正在等待 Apple 确认。完成后将自动解锁。"
+                message = String(localized: "购买正在等待 Apple 确认。完成后将自动解锁。")
             case .userCancelled:
                 return
             @unknown default:
-                message = "暂时无法确认购买状态。请稍后恢复购买。"
+                message = String(localized: "暂时无法确认购买状态。请稍后恢复购买。")
             }
         } catch {
             message = error.localizedDescription
@@ -365,7 +365,7 @@ struct MetronomeSubscriptionView: View {
         do {
             try await AppStore.sync()
             await refreshStore()
-            if !subscription.hasAccess { message = "未找到有效的节拍器订阅或买断记录。" }
+            if !subscription.hasAccess { message = String(localized: "未找到有效的节拍器订阅或买断记录。") }
         } catch {
             message = error.localizedDescription
         }

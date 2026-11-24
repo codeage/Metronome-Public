@@ -8,10 +8,10 @@ enum MetronomeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidSettings: "速度或拍号超出当前范围。可以在设置里开启专业速度范围或扩展拍号。"
-        case .audioUnavailable: "无法启动节拍音频。"
-        case .invalidCommand: "无法识别节拍器快捷指令的参数。"
-        case .subscriptionRequired: "请打开节拍器，订阅、买断或恢复购买后再使用。"
+        case .invalidSettings: String(localized: "速度或拍号超出当前范围。可以在设置里开启专业速度范围或扩展拍号。")
+        case .audioUnavailable: String(localized: "无法启动节拍音频。")
+        case .invalidCommand: String(localized: "无法识别节拍器快捷指令的参数。")
+        case .subscriptionRequired: String(localized: "请打开节拍器，订阅、买断或恢复购买后再使用。")
         }
     }
 }
@@ -29,7 +29,7 @@ final class Metronome: ObservableObject {
     @Published private(set) var effectiveTempo: Int?
     @Published private(set) var ghostBar = false
     @Published private(set) var flashTick: UInt64 = 0
-    @Published private(set) var outputName = "默认输出"
+    @Published private(set) var outputName = String(localized: "默认输出")
     @Published private(set) var outputLatency: TimeInterval = 0
     @Published var error: String?
 
@@ -324,7 +324,7 @@ final class Metronome: ObservableObject {
     private func refreshRoute() {
         outputLatency = audio?.outputLatency ?? 0
         let output = AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portName)
-        outputName = output.isEmpty ? "默认输出" : output.joined(separator: "、")
+        outputName = output.isEmpty ? String(localized: "默认输出") : ListFormatter.localizedString(byJoining: output)
     }
 
     private func handleRouteChange(_ reason: UInt?) {

@@ -102,7 +102,7 @@ struct SpokenMetronomeTempo: AppEntity {
 
     var displayRepresentation: DisplayRepresentation {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "zh-Hans")
+        formatter.locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "zh-Hans")
         formatter.numberStyle = .spellOut
         guard let spoken = formatter.string(from: NSNumber(value: id)) else {
             return DisplayRepresentation(title: "\(id)")
@@ -164,19 +164,18 @@ struct SetMetronomeMeterIntent: AppIntent {
 @available(iOS 16, *)
 struct MetronomeShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: StartMetronomeIntent(), phrases: ["启动 \(.applicationName)", "Start \(.applicationName)"],
+        AppShortcut(intent: StartMetronomeIntent(), phrases: ["启动 \(.applicationName)"],
                     shortTitle: "启动节拍器", systemImageName: "play.fill")
-        AppShortcut(intent: StopMetronomeIntent(), phrases: ["停止 \(.applicationName)", "Stop \(.applicationName)"],
+        AppShortcut(intent: StopMetronomeIntent(), phrases: ["停止 \(.applicationName)"],
                     shortTitle: "停止节拍器", systemImageName: "stop.fill")
         AppShortcut(intent: SetMetronomeTempoIntent(),
-                    phrases: ["设置 \(.applicationName) 的速度", "Set \(.applicationName) tempo"],
+                    phrases: ["设置 \(.applicationName) 的速度"],
                     shortTitle: "设置速度", systemImageName: "metronome")
         AppShortcut(intent: SetSpokenMetronomeTempoIntent(),
                     phrases: ["把 \(.applicationName) 的速度设为 \(\.$tempo) 拍"],
                     shortTitle: "指定速度", systemImageName: "metronome")
         AppShortcut(intent: SetMetronomeMeterIntent(),
-                    phrases: ["设置 \(.applicationName) 的拍号", "把 \(.applicationName) 的拍号设为 \(\.$meter)",
-                              "Set \(.applicationName) time signature", "Set \(.applicationName) to \(\.$meter)"],
+                    phrases: ["设置 \(.applicationName) 的拍号", "把 \(.applicationName) 的拍号设为 \(\.$meter)"],
                     shortTitle: "设置拍号", systemImageName: "music.note.list")
     }
 }

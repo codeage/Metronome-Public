@@ -5,10 +5,10 @@ enum BeatAccent: Int, CaseIterable, Codable, Sendable {
 
     var title: String {
         switch self {
-        case .strong: "强音"
-        case .medium: "次强音"
-        case .weak: "弱音"
-        case .silent: "静音"
+        case .strong: String(localized: "强音")
+        case .medium: String(localized: "次强音")
+        case .weak: String(localized: "弱音")
+        case .silent: String(localized: "静音")
         }
     }
 
@@ -21,13 +21,13 @@ enum BeatRhythm: Int, CaseIterable, Codable, Sendable, Identifiable {
     var id: Self { self }
     var title: String {
         switch self {
-        case .quarter: "四分音符"
-        case .eighth: "八分音符"
-        case .triplet: "三连音"
-        case .sixteenth: "十六分音符"
-        case .dotted: "附点"
-        case .syncopated: "切分"
-        case .swing: "Swing"
+        case .quarter: String(localized: "四分音符")
+        case .eighth: String(localized: "八分音符")
+        case .triplet: String(localized: "三连音")
+        case .sixteenth: String(localized: "十六分音符")
+        case .dotted: String(localized: "附点")
+        case .syncopated: String(localized: "切分")
+        case .swing: String(localized: "Swing")
         }
     }
 }
@@ -38,10 +38,10 @@ enum BeatSound: Int, CaseIterable, Codable, Sendable, Identifiable {
     var id: Self { self }
     var title: String {
         switch self {
-        case .mechanical: "机械"
-        case .electronic: "蜂鸣"
-        case .wood: "木鱼"
-        case .voice: "人声"
+        case .mechanical: String(localized: "机械")
+        case .electronic: String(localized: "蜂鸣")
+        case .wood: String(localized: "木鱼")
+        case .voice: String(localized: "人声")
         }
     }
 }

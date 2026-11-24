@@ -11,8 +11,8 @@ struct MetronomeUpdate {
 
         var buttonTitle: String {
             switch self {
-            case .appStore: "前往 App Store"
-            case .testFlight: "打开 TestFlight"
+            case .appStore: String(localized: "前往 App Store")
+            case .testFlight: String(localized: "打开 TestFlight")
             }
         }
     }

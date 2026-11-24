@@ -233,8 +233,8 @@ private struct MetronomeView: View {
         let capsuleWidth = max(0, (width - 2 * spacing) / 3)
         return HStack(spacing: spacing) {
             StableOptionMenu(
-                title: "拍号", selection: metronome.settings.meter,
-                options: MeterOption.allCases.map(\.rawValue) + ["自定义拍号"],
+                title: String(localized: "拍号"), selection: metronome.settings.meter,
+                options: MeterOption.allCases.map(\.rawValue) + [String(localized: "自定义拍号")],
                 identifier: "meter-option", compactTitle: true
             ) { value in
                 guard let meter = MeterOption(rawValue: value) else {
@@ -248,7 +248,7 @@ private struct MetronomeView: View {
             .frame(width: capsuleWidth, height: 44)
 
             StableOptionMenu(
-                title: "细分节奏", selection: metronome.settings.rhythm.title,
+                title: String(localized: "细分节奏"), selection: metronome.settings.rhythm.title,
                 options: BeatRhythm.allCases.map(\.title), identifier: "rhythm-option", compactTitle: true
             ) { value in
                 if let rhythm = BeatRhythm.allCases.first(where: { $0.title == value }) {
@@ -278,7 +278,7 @@ private struct MetronomeView: View {
                     tapPromptID = UUID()
                     metronome.perform { try metronome.tap() }
                 } label: {
-                    Text(tapPromptID == nil ? "点按测速" : "请连续点击")
+                    Text(tapPromptID == nil ? LocalizedStringKey("点按测速") : LocalizedStringKey("请连续点击"))
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
@@ -295,7 +295,7 @@ private struct MetronomeView: View {
             }
             .frame(maxWidth: controlWidth)
             if metronome.preferences.ghost.enabled && metronome.playing {
-                Text(metronome.ghostBar ? "静音小节" : "发声小节")
+                Text(metronome.ghostBar ? LocalizedStringKey("静音小节") : LocalizedStringKey("发声小节"))
                     .font(.footnote)
                     .lineLimit(1)
                     .foregroundStyle(.secondary)
@@ -350,7 +350,7 @@ private struct MetronomeView: View {
 
     private var playButton: some View {
         Button(action: togglePlayback) {
-            Label(metronome.playing ? "停止" : "开始",
+            Label(metronome.playing ? LocalizedStringKey("停止") : LocalizedStringKey("开始"),
                   systemImage: metronome.playing ? "stop.fill" : "play.fill")
                 .font(.title2.weight(.semibold))
                 .padding(.vertical, 10)
@@ -365,7 +365,7 @@ private struct MetronomeView: View {
         if metronome.playing { metronome.stop() } else { metronome.perform { try metronome.start() } }
     }
 
-    private func tempoButton(_ delta: Int, symbol: String, label: String) -> some View {
+    private func tempoButton(_ delta: Int, symbol: String, label: LocalizedStringKey) -> some View {
         Button {
             metronome.performTempo(metronome.settings.bpm + delta)
         } label: {
