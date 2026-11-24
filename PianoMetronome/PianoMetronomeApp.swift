@@ -6,17 +6,31 @@ import UIKit
 @MainActor
 struct PianoMetronomeApp: App {
     @StateObject private var metronome = Metronome.shared
+    @StateObject private var subscription = Metronome.shared.subscription
     @Environment(\.scenePhase) private var scenePhase
 
     init() { MetronomeShortcuts.updateAppShortcutParameters() }
 
     var body: some Scene {
         WindowGroup {
-            MetronomeView(metronome: metronome)
-                .onOpenURL { metronome.handle($0) }
-                .onChange(of: scenePhase, initial: true) { _, phase in
-                    metronome.setForeground(phase == .active)
+            Group {
+                if subscription.hasAccess {
+                    MetronomeView(metronome: metronome)
+                } else if subscription.isChecking {
+                    ProgressView("正在检查订阅…")
+                } else {
+                    MetronomeSubscriptionView(subscription: subscription)
                 }
+            }
+            .onOpenURL { url in
+                Task { await metronome.handle(url) }
+            }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                metronome.setForeground(phase == .active)
+            }
+            .task(id: scenePhase) {
+                if scenePhase == .active { await subscription.refresh() }
+            }
         }
     }
 }

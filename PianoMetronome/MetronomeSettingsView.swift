@@ -1,5 +1,6 @@
 ﻿import SwiftUI
 import UIKit
+import StoreKit
 
 @MainActor
 extension Metronome {
@@ -88,7 +89,14 @@ struct MeterEditor: View {
 @MainActor
 struct MetronomeSettingsView: View {
     @ObservedObject var metronome: Metronome
+    @ObservedObject private var subscription: MetronomeSubscription
     @Environment(\.dismiss) private var dismiss
+    @State private var showingSubscriptionManagement = false
+
+    init(metronome: Metronome) {
+        self.metronome = metronome
+        self.subscription = metronome.subscription
+    }
 
     var body: some View {
         NavigationStack {
@@ -102,12 +110,27 @@ struct MetronomeSettingsView: View {
                 Section {
                     NavigationLink("曲目预设") { MetronomePresetsView(metronome: metronome) }
                 }
+                Section {
+                    if subscription.ownsLifetime {
+                        Label("已永久解锁", systemImage: "checkmark")
+                    } else {
+                        NavigationLink("一次性买断") {
+                            MetronomeSubscriptionView(subscription: subscription, buyoutOnly: true)
+                        }
+                    }
+                    Button("管理订阅") { showingSubscriptionManagement = true }
+                    NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
+                }
             }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
             }
+        }
+        .manageSubscriptionsSheet(isPresented: $showingSubscriptionManagement)
+        .onChange(of: showingSubscriptionManagement) { _, isShowing in
+            if !isShowing { Task { await metronome.subscription.refresh() } }
         }
     }
 

@@ -4,13 +4,14 @@ import SwiftUI
 import UIKit
 
 enum MetronomeError: LocalizedError {
-    case invalidSettings, audioUnavailable, invalidCommand
+    case invalidSettings, audioUnavailable, invalidCommand, subscriptionRequired
 
     var errorDescription: String? {
         switch self {
         case .invalidSettings: "速度或拍号超出当前范围。可以在设置里开启专业速度范围或扩展拍号。"
         case .audioUnavailable: "无法启动节拍音频。"
         case .invalidCommand: "无法识别节拍器快捷指令的参数。"
+        case .subscriptionRequired: "请打开节拍器，订阅、买断或恢复购买后再使用。"
         }
     }
 }
@@ -18,6 +19,7 @@ enum MetronomeError: LocalizedError {
 @MainActor
 final class Metronome: ObservableObject {
     static let shared = Metronome()
+    let subscription = MetronomeSubscription()
 
     @Published private(set) var settings: BeatSettings
     @Published private(set) var preferences: MetronomePreferences
@@ -61,6 +63,11 @@ final class Metronome: ObservableObject {
         presets = (Self.read([MetronomePreset].self, key: "metronomePresets") ?? [])
             .filter { $0.settings.isValid }
 
+        subscription.onAccessLost = { [weak self] in
+            guard let self else { return }
+            error = nil
+            stop()
+        }
         display.tick = { [weak self] time in self?.renderDisplay(at: time) }
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification,
@@ -87,6 +94,7 @@ final class Metronome: ObservableObject {
     var latencyMilliseconds: Double { outputLatency * 1_000 }
 
     func update(_ value: BeatSettings) throws {
+        try subscription.requireAccess()
         guard valid(value) else { throw MetronomeError.invalidSettings }
         guard value != settings else { return }
         save(value)
@@ -95,6 +103,7 @@ final class Metronome: ObservableObject {
     }
 
     func changePreferences(_ value: MetronomePreferences) throws {
+        try subscription.requireAccess()
         var next = value
         let range = next.tempoRange
         next.offsetMilliseconds = min(500, max(-500, next.offsetMilliseconds))
@@ -128,6 +137,7 @@ final class Metronome: ObservableObject {
     }
 
     func tap() throws {
+        try subscription.requireAccess()
         if let tempo = tapTempo.tap(at: CACurrentMediaTime(), within: preferences.tempoRange) {
             try setTempo(tempo)
         }
@@ -141,6 +151,7 @@ final class Metronome: ObservableObject {
     }
 
     func start(_ value: BeatSettings? = nil) throws {
+        try subscription.requireAccess()
         let next = value ?? settings
         guard valid(next) else { throw MetronomeError.invalidSettings }
         if playing {
@@ -180,19 +191,20 @@ final class Metronome: ObservableObject {
     }
 
     func savePreset(named name: String) {
-        guard let name = Self.cleanedName(name) else { return }
+        guard subscription.hasAccess, let name = Self.cleanedName(name) else { return }
         presets.append(.init(id: UUID(), name: name, settings: settings))
         storePresets()
     }
 
     func renamePreset(_ id: UUID, to name: String) {
-        guard let name = Self.cleanedName(name),
+        guard subscription.hasAccess, let name = Self.cleanedName(name),
               let index = presets.firstIndex(where: { $0.id == id }) else { return }
         presets[index].name = name
         storePresets()
     }
 
     func deletePreset(_ id: UUID) {
+        guard subscription.hasAccess else { return }
         presets.removeAll { $0.id == id }
         storePresets()
     }
@@ -205,11 +217,12 @@ final class Metronome: ObservableObject {
         try update(preset.settings)
     }
 
-    func handle(_ url: URL) {
+    func handle(_ url: URL) async {
         do {
             guard url.scheme == "bytereset-metronome", let action = url.host,
                   let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
                   parts.path.isEmpty, parts.fragment == nil else { throw MetronomeError.invalidCommand }
+            try await subscription.verifyAccess()
             let items = parts.queryItems ?? []
             if action == "stop" {
                 guard items.isEmpty else { throw MetronomeError.invalidCommand }
@@ -324,6 +337,10 @@ final class Metronome: ObservableObject {
 
     private func recoverAudio() {
         guard playing, let audio, !audio.isRunning else { return }
+        guard subscription.hasAccess else {
+            stop()
+            return
+        }
         do {
             try audio.start(mixing: preferences.mixWithOthers)
             refreshRoute()
