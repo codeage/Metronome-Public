@@ -1,5 +1,6 @@
 ﻿import AppIntents
 import SwiftUI
+import UIKit
 
 @main
 @MainActor
@@ -44,7 +45,7 @@ enum MetronomePalette {
 @MainActor
 private struct MetronomeView: View {
     enum Panel: String, Identifiable {
-        case meter, settings
+        case meter, presets, settings
         var id: Self { self }
     }
 
@@ -57,40 +58,47 @@ private struct MetronomeView: View {
     @State private var panel: Panel?
     @State private var tapPromptID: UUID?
 
-    private var wide: Bool { horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize }
-
     var body: some View {
         GeometryReader { viewport in
-            let contentWidth = max(44, min(viewport.size.width, 900) - 32)
-            let detailWidth = (contentWidth - 28) / 2
-            let sectionSpacing: CGFloat = viewport.size.height >= 620 ? 28 : 20
-            ScrollView {
-                VStack(spacing: 16) {
-                    header
-                    if wide || (viewport.size.width > viewport.size.height && !dynamicTypeSize.isAccessibilitySize) {
-                        HStack(alignment: .top, spacing: 28) {
-                            tempo(diameter: min(detailWidth, viewport.size.height * 0.50), width: detailWidth)
-                                .frame(width: detailWidth)
-                            VStack(spacing: sectionSpacing) {
-                                soundControls(width: detailWidth)
-                                accentGrid(width: detailWidth)
-                            }
-                            .frame(maxWidth: .infinity)
+            let width = max(0, min(viewport.size.width, 900) - 32)
+            let height = viewport.size.height
+            let sideBySide = (horizontalSizeClass == .regular && width >= 600) || viewport.size.width > height * 1.6
+            let gap: CGFloat = height >= 600 ? 24 : 12
+            let dialGap: CGFloat = height >= 600 ? 24 : 16
+            let detailWidth = (width - gap) / 2
+            let ghostHeight: CGFloat = metronome.preferences.ghost.enabled && metronome.playing ? 40 : 0
+            let accents = AccentGridLayout(count: metronome.settings.accents.count,
+                                           availableWidth: sideBySide ? detailWidth : width)
+            let dialBudget = sideBySide
+                ? height - 64 - gap - 54 - dialGap - ghostHeight
+                : height - 64 - 44 - accents.height - 54 - gap * 3 - dialGap - ghostHeight
+            let diameter = min(sideBySide ? detailWidth : width * 0.86, max(52, dialBudget))
+
+            VStack(spacing: gap) {
+                header
+                if sideBySide {
+                    HStack(alignment: .center, spacing: gap) {
+                        tempo(diameter: diameter, width: detailWidth, controlGap: dialGap)
+                            .frame(width: detailWidth)
+                        VStack(spacing: gap) {
+                            soundControls(width: detailWidth)
+                            accentGrid(accents)
                         }
-                    } else {
-                        VStack(spacing: sectionSpacing) {
-                            soundControls(width: contentWidth)
-                            tempo(diameter: min(contentWidth * 0.80, max(164, viewport.size.height * 0.44)),
-                                  width: contentWidth)
-                            accentGrid(width: contentWidth)
-                        }
+                        .frame(width: detailWidth)
                     }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    soundControls(width: width)
+                    VStack(spacing: gap) {
+                        tempo(diameter: diameter, width: width, controlGap: dialGap)
+                        accentGrid(accents)
+                    }
+                    .frame(maxHeight: .infinity)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(maxWidth: 900)
-                .frame(maxWidth: .infinity)
             }
+            .padding(.vertical, 10)
+            .frame(width: width)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             playButton
@@ -124,6 +132,14 @@ private struct MetronomeView: View {
         .sheet(item: $panel, onDismiss: { keyboardFocused = true }) { panel in
             switch panel {
             case .meter: MeterEditor(metronome: metronome)
+            case .presets:
+                NavigationStack {
+                    MetronomePresetsView(metronome: metronome)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) { Button("完成") { self.panel = nil } }
+                        }
+                }
             case .settings: MetronomeSettingsView(metronome: metronome)
             }
         }
@@ -139,102 +155,80 @@ private struct MetronomeView: View {
 
     private var header: some View {
         HStack {
-            Text("节拍器")
-                .font(.largeTitle.bold())
-                .accessibilityAddTraits(.isHeader)
+            Button {
+                panel = .presets
+            } label: {
+                Label("预设", systemImage: "music.note.list")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .modifier(SettingsButtonBackground(capsule: true))
+            .accessibilityLabel("曲目预设")
+            .accessibilityIdentifier("presets-button")
+
             Spacer()
+
             Button {
                 panel = .settings
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
-                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .modifier(SettingsButtonBackground())
             .accessibilityLabel("设置")
         }
+        .foregroundStyle(.primary)
     }
 
     private func soundControls(width: CGFloat) -> some View {
         let spacing: CGFloat = 8
-        let capsuleWidth = (width - 2 * spacing) / 3
+        let capsuleWidth = max(0, (width - 2 * spacing) / 3)
         return HStack(spacing: spacing) {
-            Button {
-                panel = .meter
-            } label: {
-                optionCapsule(metronome.settings.meter, width: capsuleWidth)
-            }
-            .accessibilityLabel("拍号，\(metronome.settings.meter)")
-            .accessibilityIdentifier("meter-option")
-
-            Menu {
-                Picker("细分节奏", selection: metronome.setting(\.rhythm)) {
-                    ForEach(BeatRhythm.allCases) { Text($0.title).tag($0) }
+            StableOptionMenu(
+                title: "拍号", selection: metronome.settings.meter,
+                options: MeterOption.allCases.map(\.rawValue) + ["自定义拍号"],
+                identifier: "meter-option", compactTitle: true
+            ) { value in
+                guard let meter = MeterOption(rawValue: value) else {
+                    panel = .meter
+                    return
                 }
-            } label: {
-                optionCapsule(metronome.settings.rhythm.title, width: capsuleWidth)
+                var settings = metronome.settings
+                meter.apply(to: &settings)
+                metronome.perform { try metronome.update(settings) }
             }
-            .accessibilityLabel("细分节奏，\(metronome.settings.rhythm.title)")
-            .accessibilityIdentifier("rhythm-option")
+            .frame(width: capsuleWidth, height: 44)
 
-            Menu {
-                Picker("音色", selection: metronome.setting(\.sound)) {
-                    ForEach(BeatSound.allCases) { Text($0.title).tag($0) }
+            StableOptionMenu(
+                title: "细分节奏", selection: metronome.settings.rhythm.title,
+                options: BeatRhythm.allCases.map(\.title), identifier: "rhythm-option", compactTitle: true
+            ) { value in
+                if let rhythm = BeatRhythm.allCases.first(where: { $0.title == value }) {
+                    metronome.setting(\.rhythm).wrappedValue = rhythm
                 }
-            } label: {
-                optionCapsule(metronome.settings.sound.title, width: capsuleWidth)
             }
-            .accessibilityLabel("音色，\(metronome.settings.sound.title)")
-            .accessibilityIdentifier("sound-option")
+            .frame(width: capsuleWidth, height: 44)
+
+            BeatSoundMenu(metronome: metronome, identifier: "sound-option", compactTitle: true)
+                .frame(width: capsuleWidth, height: 44)
         }
-        .buttonStyle(.plain)
     }
 
-    private func optionCapsule(_ title: String, width: CGFloat) -> some View {
-        HStack(spacing: 5) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 10, weight: .semibold))
-                .accessibilityHidden(true)
-        }
-        .foregroundStyle(MetronomePalette.cyan)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(minWidth: width, maxWidth: width, minHeight: 44)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .background(MetronomePalette.surface, in: Capsule())
-        .contentShape(Capsule())
-    }
-
-    private func tempo(diameter: CGFloat, width: CGFloat) -> some View {
+    private func tempo(diameter: CGFloat, width: CGFloat, controlGap: CGFloat) -> some View {
         let controlWidth = min(width, max(diameter, dynamicTypeSize.isAccessibilitySize ? 340 : 275))
         let range = metronome.preferences.tempoRange
         let bpm = metronome.settings.bpm
         let displayed = metronome.preferences.trainer.enabled ? metronome.effectiveTempo ?? bpm : bpm
-        return VStack(spacing: 12) {
+        return VStack(spacing: controlGap) {
             TempoDial(bpm: displayed, diameter: diameter, range: range,
                       mark: metronome.preferences.showTempoMark ? BeatSettings(bpm: displayed).tempoMark : nil,
+                      flashTick: metronome.preferences.flash && !reduceMotion ? metronome.flashTick : nil,
                       setTempo: { metronome.performTempo($0) })
-                .overlay {
-                    if metronome.preferences.flash && !reduceMotion {
-                        Circle().strokeBorder(MetronomePalette.cyan, lineWidth: 4)
-                            .keyframeAnimator(initialValue: 0.0, trigger: metronome.flashTick) { view, opacity in
-                                view.opacity(opacity)
-                            } keyframes: { _ in
-                                LinearKeyframe(0.19, duration: 0.03)
-                                LinearKeyframe(0, duration: 0.15)
-                            }
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                }
             HStack(spacing: 12) {
                 tempoButton(-1, symbol: "minus", label: "减慢一拍每分钟")
                 Button {
@@ -260,49 +254,50 @@ private struct MetronomeView: View {
             if metronome.preferences.ghost.enabled && metronome.playing {
                 Text(metronome.ghostBar ? "静音小节" : "发声小节")
                     .font(.footnote)
+                    .lineLimit(1)
                     .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func accentGrid(width: CGFloat) -> some View {
-        let gridWidth = min(width, 520)
+    private func accentGrid(_ layout: AccentGridLayout) -> some View {
         let count = metronome.settings.accents.count
-        let gap: CGFloat = 6
-        let columns = min(count, max(1, Int((gridWidth + gap) / (44 + gap))))
-        let cellWidth = min(50, (gridWidth - CGFloat(columns - 1) * gap) / CGFloat(columns))
-
-        return VStack(spacing: gap) {
-            ForEach(Array(stride(from: 0, to: count, by: columns)), id: \.self) { start in
-                HStack(spacing: gap) {
-                    ForEach(start..<min(start + columns, count), id: \.self) { beat in
-                        accentButton(beat)
-                            .frame(width: cellWidth)
+        return VStack(spacing: layout.rowSpacing) {
+            ForEach(Array(stride(from: 0, to: count, by: layout.columns)), id: \.self) { start in
+                HStack(spacing: layout.columnSpacing) {
+                    ForEach(start..<min(start + layout.columns, count), id: \.self) { beat in
+                        accentButton(beat, layout: layout)
                     }
                 }
-                .frame(maxWidth: .infinity)
             }
         }
-        .frame(width: gridWidth)
         .frame(maxWidth: .infinity)
+        .frame(height: layout.height)
     }
 
-    private func accentButton(_ beat: Int) -> some View {
+    private func accentButton(_ beat: Int, layout: AccentGridLayout) -> some View {
         let accent = metronome.settings.accents[beat]
         let active = metronome.currentBeat == beat
+        let compact = layout.cellWidth < 44
+        let symbolFont: Font = compact ? .system(size: min(17, max(10, layout.cellWidth * 0.45))) : .body
+        let numberFont: Font = compact ? .system(size: min(12, max(9, layout.cellWidth * 0.34))) : .caption2
         return Button {
             metronome.perform { try metronome.cycleAccent(beat) }
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: compact ? 1 : 3) {
                 Image(systemName: accent.symbol)
+                    .font(symbolFont)
                     .foregroundStyle(active ? MetronomePalette.cyan : .primary)
-                Text("\(beat + 1)").font(.caption2.monospacedDigit())
+                Text("\(beat + 1)")
+                    .font(numberFont.monospacedDigit())
+                    .lineLimit(1)
             }
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .frame(width: layout.cellWidth, height: layout.cellHeight)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .background(active ? MetronomePalette.track : MetronomePalette.surface,
-                        in: RoundedRectangle(cornerRadius: 9))
+                        in: RoundedRectangle(cornerRadius: compact ? 6 : 9))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("第 \(beat + 1) 拍")
@@ -357,9 +352,38 @@ private extension BeatAccent {
     }
 }
 
+private struct AccentGridLayout {
+    let columns: Int
+    let columnSpacing: CGFloat
+    let cellWidth: CGFloat
+    let cellHeight: CGFloat
+    let height: CGFloat
+    let rowSpacing: CGFloat = 4
+
+    init(count: Int, availableWidth: CGFloat) {
+        let width = min(max(availableWidth, 1), 520)
+        let usesFullSize = CGFloat(count) * 44 + CGFloat(max(0, count - 1)) * 6 <= width
+        columnSpacing = usesFullSize ? 6 : 3
+        let maxColumns = max(1, Int((width + columnSpacing) / (24 + columnSpacing)))
+        let rows = max(1, (count + maxColumns - 1) / maxColumns)
+        columns = max(1, (count + rows - 1) / rows)
+        cellWidth = min(44, (width - CGFloat(columns - 1) * columnSpacing) / CGFloat(columns))
+        cellHeight = min(48, max(30, cellWidth * 1.12))
+        height = CGFloat(rows) * cellHeight + CGFloat(rows - 1) * rowSpacing
+    }
+}
+
 private struct SettingsButtonBackground: ViewModifier {
+    var capsule = false
+
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
+        if capsule {
+            if #available(iOS 26, *) {
+                content.glassEffect(.regular.interactive(), in: .capsule)
+            } else {
+                content.background(MetronomePalette.surface, in: Capsule())
+            }
+        } else if #available(iOS 26, *) {
             content.glassEffect(.regular.interactive(), in: .circle)
         } else {
             content.background(MetronomePalette.surface, in: Circle())
@@ -372,29 +396,29 @@ private struct TempoDial: View {
     let diameter: CGFloat
     let range: ClosedRange<Int>
     let mark: String?
+    let flashTick: UInt64?
     let setTempo: (Int) -> Void
 
-    @GestureState private var previewTempo: Int?
+    @GestureState private var touchingRim = false
+    @State private var drag: TempoDialDrag?
     @ScaledMetric(relativeTo: .largeTitle) private var speedScale: CGFloat = 1
-    private let startAngle = 140.0
-    private let sweep = 300.0
-    private var minimumArc: Double { 360 - sweep }
-    private let tempoCurve = 0.62
 
     var body: some View {
-        let value = previewTempo ?? bpm
-        let span = Double(range.upperBound - range.lowerBound)
-        let progress = pow(Double(value - range.lowerBound) / span, tempoCurve)
-        let lineWidth = diameter * 0.049
-
+        let value = drag?.tempo ?? bpm
+        let progress = TempoDialDrag.progress(for: value, in: range)
+        let diameter = diameter
         ZStack {
-            Circle().strokeBorder(MetronomePalette.track, lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: (minimumArc + progress * sweep) / 360)
-                .stroke(MetronomePalette.cyan, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .padding(lineWidth / 2)
-                .rotationEffect(.degrees(startAngle - minimumArc))
-                .shadow(color: MetronomePalette.cyan.opacity(0.42), radius: 8)
+            if let flashTick {
+                Self.ring(diameter: diameter, progress: progress, pulse: 0)
+                    .keyframeAnimator(initialValue: 0.0, trigger: flashTick) { _, pulse in
+                        Self.ring(diameter: diameter, progress: progress, pulse: pulse)
+                    } keyframes: { _ in
+                        LinearKeyframe(1, duration: 0.035)
+                        CubicKeyframe(0, duration: 0.19)
+                    }
+            } else {
+                Self.ring(diameter: diameter, progress: progress, pulse: 0)
+            }
             VStack(spacing: 2) {
                 Text("速度").font(.headline).foregroundStyle(.secondary)
                 Text("\(value)")
@@ -404,15 +428,16 @@ private struct TempoDial: View {
             }
         }
         .frame(width: diameter, height: diameter)
-        .contentShape(Circle())
-        .gesture(DragGesture(minimumDistance: 4)
-            .updating($previewTempo) { drag, preview, _ in
-                if isOnRim(drag.startLocation) { preview = tempo(at: drag.location, startingAt: drag.startLocation) }
-            }
-            .onEnded { drag in
-                if isOnRim(drag.startLocation) { setTempo(tempo(at: drag.location, startingAt: drag.startLocation)) }
-            })
+        .overlay {
+            Color.clear
+                .contentShape(TempoDialRim(), eoFill: true)
+                .gesture(turn)
+        }
+        .onChange(of: touchingRim) { _, touching in
+            if !touching { drag = nil }
+        }
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("tempo-dial")
         .accessibilityLabel("速度")
         .accessibilityValue("每分钟 \(value) 拍")
         .accessibilityAdjustableAction { direction in
@@ -424,23 +449,60 @@ private struct TempoDial: View {
         }
     }
 
-    private func isOnRim(_ point: CGPoint) -> Bool {
-        hypot(point.x - diameter / 2, point.y - diameter / 2) >= diameter * 0.34
-    }
-
-    private func angle(at point: CGPoint) -> Double {
-        let degrees = atan2(Double(point.y - diameter / 2), Double(point.x - diameter / 2)) * 180 / .pi
-        return (degrees - startAngle + 720).truncatingRemainder(dividingBy: 360)
-    }
-
-    private func tempo(at point: CGPoint, startingAt start: CGPoint) -> Int {
-        let offset = angle(at: point)
-        if offset <= sweep {
-            let span = Double(range.upperBound - range.lowerBound)
-            return range.lowerBound + Int((pow(offset / sweep, 1 / tempoCurve) * span).rounded())
+    nonisolated private static func ring(diameter: CGFloat, progress: Double, pulse strength: Double) -> some View {
+        let pulse = min(max(strength, 0), 1)
+        let lineWidth = diameter * 0.049
+        return ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [MetronomePalette.cyan.opacity(0.16 * pulse), .clear],
+                                     center: .center, startRadius: 0, endRadius: diameter / 2))
+            Circle().strokeBorder(MetronomePalette.track, lineWidth: lineWidth)
+            Circle()
+                .strokeBorder(MetronomePalette.cyan.opacity(0.55 * pulse), lineWidth: lineWidth)
+                .shadow(color: MetronomePalette.cyan.opacity(0.65 * pulse), radius: 15 * pulse)
+            Circle()
+                .trim(from: 0, to: progress * TempoDialDrag.sweep / 360)
+                .stroke(MetronomePalette.cyan, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .padding(lineWidth / 2)
+                .rotationEffect(.degrees(TempoDialDrag.zeroAngle))
+                .brightness(0.18 * pulse)
+                .shadow(color: MetronomePalette.cyan.opacity(0.38 + 0.42 * pulse), radius: 8 + 4 * pulse)
+            Capsule()
+                .fill(.white.opacity(0.85))
+                .frame(width: max(2, lineWidth * 0.18), height: lineWidth * 0.9)
+                .offset(y: (diameter - lineWidth) / 2)
         }
-        let initial = angle(at: start)
-        if initial > sweep { return initial < (360 + sweep) / 2 ? range.upperBound : range.lowerBound }
-        return initial > sweep / 2 ? range.upperBound : range.lowerBound
+        .scaleEffect(1 + 0.018 * pulse)
+    }
+
+    private var turn: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .updating($touchingRim) { _, touching, _ in touching = true }
+            .onChanged { value in
+                if drag == nil {
+                    drag = TempoDialDrag(tempo: bpm, range: range, start: centered(value.startLocation))
+                }
+                drag?.update(to: centered(value.location))
+            }
+            .onEnded { value in
+                guard var drag else { return }
+                drag.update(to: centered(value.location))
+                let next = drag.tempo
+                self.drag = nil
+                if next != bpm { setTempo(next) }
+            }
+    }
+
+    private func centered(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x - diameter / 2, y: point.y - diameter / 2)
+    }
+}
+
+private struct TempoDialRim: Shape {
+    func path(in rect: CGRect) -> Path {
+        let touchWidth = min(44, rect.width * 0.27)
+        var path = Path(ellipseIn: rect)
+        path.addEllipse(in: rect.insetBy(dx: touchWidth, dy: touchWidth))
+        return path
     }
 }

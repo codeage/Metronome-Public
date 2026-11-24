@@ -96,7 +96,7 @@ struct BeatSettings: Equatable, Codable, Sendable {
     var sound: BeatSound
     var accents: [BeatAccent]
 
-    static let units = [2, 4, 8, 16]
+    static let units = [2, 4, 8, 16, 32, 64]
 
     init(bpm: Int = 120, beats: Int = 4, unit: Int = 4, subdivision: Int = 1, accent: Bool = true) {
         self.bpm = bpm
@@ -191,5 +191,60 @@ struct TapTempo {
         let tempo = (60 / average).rounded()
         guard tempo.isFinite else { return nil }
         return Int(min(Double(range.upperBound), max(Double(range.lowerBound), tempo)))
+    }
+}
+
+/// Translates angular travel into tempo while keeping the starting value under the user's finger.
+struct TempoDialDrag {
+    static let zeroAngle = 90.0
+    static let sweep = 360.0
+
+    private let range: ClosedRange<Int>
+    private let referenceRadius: Double
+    private var angle: Double?
+    private var offset: Double
+    private var hasTurned = false
+
+    init(tempo: Int, range: ClosedRange<Int>, start: CGPoint) {
+        self.range = range
+        referenceRadius = hypot(Double(start.x), Double(start.y))
+        angle = Self.angle(at: start)
+        offset = Self.progress(for: tempo, in: range) * Self.sweep
+    }
+
+    var tempo: Int {
+        Int((offset / Self.sweep * Double(range.upperBound)).rounded())
+    }
+
+    static func progress(for tempo: Int, in range: ClosedRange<Int>) -> Double {
+        Double(min(max(tempo, 0), range.upperBound)) / Double(range.upperBound)
+    }
+
+    mutating func update(to point: CGPoint) {
+        let radius = hypot(Double(point.x), Double(point.y))
+        guard radius >= referenceRadius * 0.55 else {
+            angle = nil
+            return
+        }
+
+        let previousAngle = angle
+        let nextAngle = Self.angle(at: point)
+        angle = nextAngle
+        guard let previousAngle else { return }
+
+        let delta = (nextAngle - previousAngle + 540).truncatingRemainder(dividingBy: 360) - 180
+        // Discard discontinuities if a finger crosses the center between samples.
+        guard abs(delta) <= 90 else { return }
+        if !hasTurned {
+            let tangentialTravel = abs(delta) * .pi / 180 * referenceRadius
+            guard tangentialTravel > abs(radius - referenceRadius) else { return }
+            hasTurned = true
+        }
+        let minimumOffset = Self.progress(for: range.lowerBound, in: range) * Self.sweep
+        offset = min(max(offset + delta, minimumOffset), Self.sweep)
+    }
+
+    private static func angle(at point: CGPoint) -> Double {
+        atan2(Double(point.y), Double(point.x)) * 180 / .pi
     }
 }

@@ -207,7 +207,7 @@ final class Metronome: ObservableObject {
 
     func handle(_ url: URL) {
         do {
-            guard url.scheme == "pianometronome", let action = url.host,
+            guard url.scheme == "bytereset-metronome", let action = url.host,
                   let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
                   parts.path.isEmpty, parts.fragment == nil else { throw MetronomeError.invalidCommand }
             let items = parts.queryItems ?? []

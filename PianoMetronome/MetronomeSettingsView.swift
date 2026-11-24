@@ -1,4 +1,5 @@
 ﻿import SwiftUI
+import UIKit
 
 @MainActor
 extension Metronome {
@@ -112,8 +113,9 @@ struct MetronomeSettingsView: View {
 
     private var audioSection: some View {
         Section("音频") {
-            Picker("音色", selection: metronome.setting(\.sound)) {
-                ForEach(BeatSound.allCases) { Text($0.title).tag($0) }
+            LabeledContent("音色") {
+                BeatSoundMenu(metronome: metronome, identifier: "settings-sound-option")
+                    .frame(width: 118, height: 44)
             }
             VStack(alignment: .leading) {
                 Text("音量")
@@ -193,7 +195,94 @@ struct MetronomeSettingsView: View {
 }
 
 @MainActor
-private struct MetronomePresetsView: View {
+struct BeatSoundMenu: View {
+    @ObservedObject var metronome: Metronome
+    let identifier: String
+    var compactTitle = false
+
+    var body: some View {
+        StableOptionMenu(title: "音色", selection: metronome.settings.sound.title,
+                         options: BeatSound.allCases.map(\.title), identifier: identifier,
+                         compactTitle: compactTitle) { value in
+            if let sound = BeatSound.allCases.first(where: { $0.title == value }) {
+                metronome.setting(\.sound).wrappedValue = sound
+            }
+        }
+    }
+}
+
+@MainActor
+struct StableOptionMenu: UIViewRepresentable {
+    let title: String
+    let selection: String
+    let options: [String]
+    let identifier: String
+    var compactTitle = false
+    let select: (String) -> Void
+
+    @MainActor
+    final class Coordinator {
+        var selection: String?
+        var options: [String] = []
+        var select: ((String) -> Void)?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.showsMenuAsPrimaryAction = true
+        button.preferredMenuElementOrder = .fixed
+        button.accessibilityIdentifier = identifier
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.select = select
+        // Playback can redraw the parent on every beat. Keep the open menu and its selection intact.
+        guard coordinator.selection != selection || coordinator.options != options else { return }
+        coordinator.selection = selection
+        coordinator.options = options
+
+        var configuration: UIButton.Configuration
+        if #available(iOS 26, *) {
+            configuration = .glass()
+        } else {
+            configuration = .filled()
+            configuration.baseBackgroundColor = UIColor(MetronomePalette.surface)
+        }
+        configuration.title = selection
+        if compactTitle {
+            let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: button.traitCollection)
+            configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                var attributes = attributes
+                attributes.font = font
+                return attributes
+            }
+        }
+        configuration.baseForegroundColor = UIColor(MetronomePalette.cyan)
+        configuration.cornerStyle = .capsule
+        configuration.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10))
+        configuration.imagePlacement = .trailing
+        configuration.imagePadding = 5
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 7, bottom: 0, trailing: 7)
+        configuration.titleLineBreakMode = .byTruncatingTail
+        button.configuration = configuration
+        button.titleLabel?.minimumScaleFactor = 0.6
+        button.titleLabel?.adjustsFontSizeToFitWidth = true
+        button.accessibilityLabel = title
+        button.accessibilityValue = selection
+        button.menu = UIMenu(children: options.map { option in
+            UIAction(title: option, state: option == selection ? .on : .off) { [weak coordinator] _ in
+                coordinator?.select?(option)
+            }
+        })
+    }
+}
+
+@MainActor
+struct MetronomePresetsView: View {
     @ObservedObject var metronome: Metronome
     @Environment(\.dismiss) private var dismiss
     @State private var editing: UUID?

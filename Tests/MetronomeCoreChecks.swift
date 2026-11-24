@@ -10,6 +10,7 @@ struct MetronomeCoreChecks {
     static func main() throws {
         try checkSettingsMigration()
         checkTapTempo()
+        checkTempoDialDrag()
         checkRenderTiming()
         checkTrainingAndGhostBars()
         checkTempoChange()
@@ -20,7 +21,46 @@ struct MetronomeCoreChecks {
     }
     #endif
 
+    static func checkTempoDialDrag() {
+        let range = 30...250
+        func point(at degrees: Double, radius: Double = 100) -> CGPoint {
+            let angle = degrees * .pi / 180
+            return CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+        }
+
+        precondition(TempoDialDrag.zeroAngle == 90)
+        precondition(TempoDialDrag.progress(for: 0, in: range) == 0)
+        precondition(TempoDialDrag.progress(for: 30, in: range) == 0.12)
+        precondition(TempoDialDrag.progress(for: 125, in: range) == 0.5)
+        precondition(TempoDialDrag.progress(for: 250, in: range) == 1)
+        precondition(TempoDialDrag.progress(for: 150, in: 20...300) == 0.5)
+        precondition(TempoDialDrag.progress(for: 300, in: 20...300) == 1)
+        var drag = TempoDialDrag(tempo: 120, range: range, start: point(at: 175))
+        precondition(drag.tempo == 120)
+        drag.update(to: point(at: -175)) // Clockwise across atan2's wrap.
+        precondition((121...135).contains(drag.tempo))
+        drag.update(to: point(at: 175))
+        precondition(drag.tempo == 120)
+
+        var radial = TempoDialDrag(tempo: 120, range: range, start: point(at: 175))
+        radial.update(to: point(at: 180, radius: 70))
+        precondition(radial.tempo == 120)
+        radial.update(to: .zero)
+        radial.update(to: point(at: 50))
+        precondition(radial.tempo == 120) // Re-anchor after a center crossing.
+
+        for (limit, turn) in [(range.lowerBound, -20.0), (range.upperBound, 20.0)] {
+            var edge = TempoDialDrag(tempo: limit, range: range, start: point(at: 90))
+            edge.update(to: point(at: 90 + turn))
+            precondition(edge.tempo == limit)
+            edge.update(to: point(at: 90))
+            precondition(edge.tempo != limit) // Reversing direction responds immediately.
+        }
+    }
+
     static func checkSettingsMigration() throws {
+        precondition(BeatSettings(beats: 17, unit: 32).isValid)
+        precondition(BeatSettings(beats: 32, unit: 64).isValid)
         let legacy = Data(#"{"bpm":275,"beats":6,"unit":8,"subdivision":3,"accent":false}"#.utf8)
         let migrated = try JSONDecoder().decode(BeatSettings.self, from: legacy)
         precondition(migrated.isValid && migrated.bpm == 275 && migrated.meter == "6/8")

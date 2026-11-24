@@ -6,7 +6,7 @@ import UIKit
 @MainActor
 final class MetronomeLiveActivity {
     private typealias PlaybackActivity = Activity<MetronomeActivityAttributes>
-    private let logger = Logger(subsystem: "app.music.metronome", category: "LiveActivity")
+    private let logger = Logger(subsystem: "com.bytereset.metronome", category: "LiveActivity")
     private var desired: MetronomeActivityAttributes.ContentState?
     private var needsUpdate = false
     private var worker: Task<Void, Never>?

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>$(DEVELOPMENT_LANGUAGE)</string>
-    <key>CFBundleDisplayName</key><string>节拍器</string>
+    <key>CFBundleDisplayName</key><string>ByteReset Metronome</string>
     <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -14,7 +14,7 @@
     <key>CFBundleURLTypes</key>
     <array><dict>
         <key>CFBundleURLName</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-        <key>CFBundleURLSchemes</key><array><string>pianometronome</string></array>
+        <key>CFBundleURLSchemes</key><array><string>bytereset-metronome</string></array>
     </dict></array>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSSupportsLiveActivities</key><true/>

@@ -91,3 +91,22 @@ jobs:
           compression-level: 0
           if-no-files-found: error
           retention-days: 1
+
+      - name: Package the unsigned IPA
+        if: ${{ inputs.recipient == '' }}
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/MetronomeIPA"
+          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
+          mkdir -p "$stage/Payload"
+          ditto "$app" "$stage/Payload/PianoMetronome.app"
+          cd "$stage"
+          zip -qr ByteReset-Metronome-unsigned.ipa Payload
+          unzip -tq ByteReset-Metronome-unsigned.ipa
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ inputs.recipient == '' }}
+        with:
+          name: ByteReset-Metronome-unsigned
+          path: ${{ runner.temp }}/MetronomeIPA/ByteReset-Metronome-unsigned.ipa
+          if-no-files-found: error
