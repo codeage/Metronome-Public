@@ -40,8 +40,10 @@ jobs:
           set -euo pipefail
           xcodebuild -version
           build_settings=()
-          if [[ -n "$RECIPIENT" ]]; then
+          if [[ -n "$SOURCE_SHA" || -n "$RECIPIENT" ]]; then
             [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]] || { echo 'Public main changed during dispatch'; exit 1; }
+          fi
+          if [[ -n "$RECIPIENT" ]]; then
             [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]] || { echo 'Invalid encryption recipient'; exit 1; }
             if [[ -z "$BUILD_NUMBER" ]]; then
               [[ "$RELEASE_SEQUENCE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid release sequence'; exit 1; }
@@ -49,7 +51,9 @@ jobs:
               [[ "$base" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid project build number'; exit 1; }
               BUILD_NUMBER=$((base + RELEASE_SEQUENCE))
             fi
-            [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
+          fi
+          if [[ -n "" ]]; then
+            [[ "" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
             build_settings=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
           fi
           xcodebuild \
