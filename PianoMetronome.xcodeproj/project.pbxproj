@@ -5,6 +5,7 @@
     objectVersion = 54;
     objects = {
 /* Begin PBXBuildFile section */
+        000000000000000000000048 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000049; };
         000000000000000000000046 /* MetronomeSubscription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000047; };
         000000000000000000000011 /* PianoMetronomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000021; };
         000000000000000000000012 /* Metronome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000022; };
@@ -52,6 +53,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        00000000000000000000004A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+        00000000000000000000004B /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+        00000000000000000000004C /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
         000000000000000000000047 /* MetronomeSubscription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeSubscription.swift; sourceTree = "<group>"; };
         000000000000000000000021 /* PianoMetronomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoMetronomeApp.swift; sourceTree = "<group>"; };
         000000000000000000000022 /* Metronome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metronome.swift; sourceTree = "<group>"; };
@@ -85,7 +89,7 @@
         000000000000000000000041 = {isa = PBXGroup; children = (000000000000000000000042, 000000000000000000000044, 000000000000000000000045, 000000000000000000000043, ); sourceTree = "<group>"; };
         000000000000000000000042 /* PianoMetronome */ = {
             isa = PBXGroup;
-            children = (000000000000000000000021, 000000000000000000000022, 000000000000000000000023, 000000000000000000000026, 000000000000000000000027, 000000000000000000000024, 00000000000000000000002B, 00000000000000000000002C, 00000000000000000000002D, 00000000000000000000002E, 00000000000000000000002F, 000000000000000000000030, 00000000000000000000003A, 000000000000000000000047, );
+            children = (000000000000000000000021, 000000000000000000000022, 000000000000000000000023, 000000000000000000000026, 000000000000000000000027, 000000000000000000000024, 00000000000000000000002B, 00000000000000000000002C, 00000000000000000000002D, 00000000000000000000002E, 00000000000000000000002F, 000000000000000000000030, 00000000000000000000003A, 000000000000000000000047, 000000000000000000000049, );
             path = PianoMetronome;
             sourceTree = "<group>";
         };
@@ -143,7 +147,7 @@
             compatibilityVersion = "Xcode 13.0";
             developmentRegion = "zh-Hans";
             hasScannedForEncodings = 0;
-            knownRegions = ("zh-Hans", Base, );
+            knownRegions = ("zh-Hans", "zh-Hant", en, Base, );
             mainGroup = 000000000000000000000041;
             productRefGroup = 000000000000000000000043;
             projectDirPath = "";
@@ -156,7 +160,7 @@
         000000000000000000000036 = {
             isa = PBXResourcesBuildPhase;
             buildActionMask = 2147483647;
-            files = (000000000000000000000019, );
+            files = (000000000000000000000019, 000000000000000000000048, );
             runOnlyForDeploymentPostprocessing = 0;
         };
 /* End PBXResourcesBuildPhase section */
@@ -176,6 +180,15 @@
         };
         000000000000000000000037 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000001E, 00000000000000000000001F, 000000000000000000000010, 000000000000000000000020, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+        000000000000000000000049 /* InfoPlist.strings */ = {
+            isa = PBXVariantGroup;
+            children = (00000000000000000000004A, 00000000000000000000004B, 00000000000000000000004C, );
+            name = InfoPlist.strings;
+            sourceTree = "<group>";
+        };
+/* End PBXVariantGroup section */
 
 /* Begin PBXTargetDependency section */
         000000000000000000000091 = {
