@@ -12,6 +12,8 @@ final class MetronomeSubscription: ObservableObject {
     }
 
     @Published private var access: Access = .checking
+    @Published private var testingSession = false
+    @Published private(set) var canContinueTesting = false
     var onAccessLost: (() -> Void)?
 
     private var refreshTask: Task<Void, Never>?
@@ -37,11 +39,25 @@ final class MetronomeSubscription: ObservableObject {
         #if targetEnvironment(simulator)
         if isLayoutPreview { return true }
         #endif
+        if testingSession { return true }
         return switch access {
         case .lifetime: true
         case .active(let expiration): expiration > .now
         case .checking, .locked: false
         }
+    }
+
+    func checkTestBuild() async {
+        guard !canContinueTesting, let result = try? await AppTransaction.shared,
+              case .verified(let transaction) = result,
+              transaction.bundleID == Bundle.main.bundleIdentifier,
+              transaction.environment == .sandbox else { return }
+        canContinueTesting = true
+    }
+
+    func continueTesting() {
+        guard canContinueTesting, access == .locked else { return }
+        testingSession = true
     }
 
     func requireAccess() throws {
@@ -88,6 +104,7 @@ final class MetronomeSubscription: ObservableObject {
                 expirationTask?.cancel()
                 expirationTask = nil
                 if !ownsLifetime { access = .lifetime }
+                if testingSession { testingSession = false }
                 return
             }
             guard transaction.productID == Self.annualProductID,
@@ -101,7 +118,7 @@ final class MetronomeSubscription: ObservableObject {
         expirationTask = nil
         guard let latestExpiration, latestExpiration > .now else {
             if access != .locked {
-                onAccessLost?()
+                if !testingSession { onAccessLost?() }
                 access = .locked
             }
             return
@@ -109,6 +126,7 @@ final class MetronomeSubscription: ObservableObject {
 
         let next = Access.active(until: latestExpiration)
         if access != next { access = next }
+        if testingSession { testingSession = false }
         expirationTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .seconds(max(0, latestExpiration.timeIntervalSinceNow)))
@@ -187,6 +205,13 @@ struct MetronomeSubscriptionView: View {
                 } else if lifetime == nil || (!buyoutOnly && annual == nil) {
                     Button("重新加载价格") { Task { await loadProducts() } }
                         .disabled(busy)
+                }
+
+                if !buyoutOnly && !loading && annual == nil && subscription.canContinueTesting {
+                    purchaseButton("继续测试") { subscription.continueTesting() }
+                    Text("仅本次启动有效。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 accountActions
@@ -298,6 +323,9 @@ struct MetronomeSubscriptionView: View {
             products = availableProducts
         } catch {
             if !Task.isCancelled && products.isEmpty { message = error.localizedDescription }
+        }
+        if !Task.isCancelled && !buyoutOnly && annual == nil {
+            await subscription.checkTestBuild()
         }
     }
 
