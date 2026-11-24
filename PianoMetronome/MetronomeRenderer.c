@@ -6,6 +6,7 @@
 #include <string.h>
 
 enum { eventCount = 128, voiceFrames = 24000, maxBeats = 32 };
+enum { firstVoiceSound = 3, voiceLanguages = 2 };
 _Static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "64-bit atomics must be lock-free");
 typedef atomic_ullong AtomicWord;
 
@@ -27,7 +28,7 @@ struct MetronomeRenderer {
     SettingsMailbox mailbox;
     EventSlot events[eventCount];
     AtomicWord published;
-    AtomicWord voiceCounts[maxBeats];
+    AtomicWord voiceCounts[voiceLanguages][maxBeats];
     uint64_t applied, serial, bar, frame, trainerFirstBar;
     uint32_t beat, tempo, pulse, toneFrames;
     double sampleRate, nextBeat, beatStart, beatDuration;
@@ -35,7 +36,7 @@ struct MetronomeRenderer {
     MetronomeRenderSettings settings;
     Click primary, secondary;
     float tones[3][3][4096];
-    float voices[maxBeats][voiceFrames];
+    float voices[voiceLanguages][maxBeats][voiceFrames];
 };
 
 static uint64_t double_bits(double value) {
@@ -129,7 +130,9 @@ MetronomeRenderer *metronome_create(double sampleRate) {
         atomic_init(&r->events[i].host, 0);
         atomic_init(&r->events[i].data, 0);
     }
-    for (int i = 0; i < maxBeats; ++i) atomic_init(&r->voiceCounts[i], 0);
+    for (int voice = 0; voice < voiceLanguages; ++voice) {
+        for (int beat = 0; beat < maxBeats; ++beat) atomic_init(&r->voiceCounts[voice][beat], 0);
+    }
     r->settings = (MetronomeRenderSettings){.bpm = 120, .beats = 4, .volume = 1, .accents = 0xa8};
     r->toneFrames = (uint32_t)fmin(4096, sampleRate * 0.065);
     for (int sound = 0; sound < 3; ++sound) {
@@ -173,7 +176,14 @@ void metronome_reset(MetronomeRenderer *r) {
 }
 
 bool metronome_load_voice(MetronomeRenderer *r, uint32_t beat, const float *data, uint32_t frames) {
-    if (beat >= maxBeats || !data || frames == 0 || atomic_load(&r->voiceCounts[beat])) return false;
+    return metronome_load_voice_for_sound(r, firstVoiceSound, beat, data, frames);
+}
+
+bool metronome_load_voice_for_sound(MetronomeRenderer *r, uint32_t sound, uint32_t beat,
+                                    const float *data, uint32_t frames) {
+    uint32_t voice = sound - firstVoiceSound;
+    if (voice >= voiceLanguages || beat >= maxBeats || !data || frames == 0 ||
+        atomic_load(&r->voiceCounts[voice][beat])) return false;
     if (frames > voiceFrames) frames = voiceFrames;
     float peak = 0;
     for (uint32_t i = 0; i < frames; ++i) {
@@ -184,9 +194,9 @@ bool metronome_load_voice(MetronomeRenderer *r, uint32_t beat, const float *data
     const float ceiling = 0.98f / tanhf(drive);
     for (uint32_t i = 0; i < frames; ++i) {
         float value = isfinite(data[i]) ? data[i] / peak : 0;
-        r->voices[beat][i] = tanhf(value * drive) * ceiling;
+        r->voices[voice][beat][i] = tanhf(value * drive) * ceiling;
     }
-    atomic_store(&r->voiceCounts[beat], frames);
+    atomic_store(&r->voiceCounts[voice][beat], frames);
     return true;
 }
 
@@ -232,9 +242,10 @@ static uint32_t trained_tempo(MetronomeRenderer *r) {
 
 static Click click(MetronomeRenderer *r, uint32_t sound, uint32_t accent, uint32_t beat, bool subdivision) {
     float gain = subdivision ? 0.50f : accent == 0 ? 1.0f : accent == 1 ? 0.88f : 0.75f;
-    if (sound == 3 && !subdivision) {
-        uint32_t count = (uint32_t)atomic_load(&r->voiceCounts[beat]);
-        if (count) return (Click){r->voices[beat], count, 0, gain};
+    uint32_t voice = sound - firstVoiceSound;
+    if (voice < voiceLanguages && !subdivision) {
+        uint32_t count = (uint32_t)atomic_load(&r->voiceCounts[voice][beat]);
+        if (count) return (Click){r->voices[voice][beat], count, 0, gain};
     }
     if (sound > 2) sound = 2;
     return (Click){r->tones[sound][accent], r->toneFrames, 0, gain};

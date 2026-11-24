@@ -44,10 +44,7 @@ final class MetronomeAudio {
     private let storage: RenderStorage
     private let engine = AVAudioEngine()
     private let session = AVAudioSession.sharedInstance()
-    private let speech = AVSpeechSynthesizer()
-    private var nextVoice = 0
-    private var voiceBuffer: [Float] = []
-    private var loadingVoice = false
+    private var loadedVoiceSounds: Set<BeatSound> = []
 
     var isRunning: Bool { engine.isRunning }
     var outputLatency: TimeInterval { session.outputLatency }
@@ -63,10 +60,10 @@ final class MetronomeAudio {
         let source = AVAudioSourceNode(format: format, renderBlock: block)
         engine.attach(source)
         engine.connect(source, to: engine.mainMixerNode, format: format)
-        speech.usesApplicationAudioSession = false
     }
 
     func configure(_ settings: BeatSettings, _ preferences: MetronomePreferences) {
+        loadVoiceIfNeeded(settings.sound)
         let accents = settings.accents.enumerated().reduce(UInt64(0)) { bits, entry in
             bits | (UInt64(entry.element.rawValue) << (entry.offset * 2))
         }
@@ -82,7 +79,6 @@ final class MetronomeAudio {
             accents: accents, volume: Float(preferences.volume), balance: Float(preferences.balance)
         )
         metronome_configure(storage.pointer, command)
-        if settings.sound == .voice { loadNextVoice() }
     }
 
     func start(mixing: Bool) throws {
@@ -115,51 +111,22 @@ final class MetronomeAudio {
         return metronome_event_at(storage.pointer, time, &event) ? event : nil
     }
 
-    private func loadNextVoice() {
-        guard !loadingVoice, nextVoice < 32 else { return }
-        loadingVoice = true
-        let utterance = AVSpeechUtterance(string: String(nextVoice + 1))
-        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
-        utterance.rate = 0.6
-        speech.write(utterance) { @Sendable [weak self] audioBuffer in
-            guard let pcm = audioBuffer as? AVAudioPCMBuffer else { return }
-            let ended = pcm.frameLength == 0
-            let samples = Self.monoSamples(pcm)
-            DispatchQueue.main.async {
-                self?.receiveVoice(samples, ended: ended)
-            }
+    private func loadVoiceIfNeeded(_ sound: BeatSound) {
+        guard let folder = sound.voiceFolder, let resources = Bundle.main.resourceURL,
+              loadedVoiceSounds.insert(sound).inserted else { return }
+        let directory = resources.appendingPathComponent("CountVoices", isDirectory: true)
+            .appendingPathComponent(folder, isDirectory: true)
+        for beat in 0..<32 {
+            let url = directory.appendingPathComponent(String(format: "%02d.wav", beat + 1))
+            guard let file = try? AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false),
+                  file.processingFormat.sampleRate == RenderStorage.sampleRate,
+                  file.processingFormat.channelCount == 1, (1...24_000).contains(file.length),
+                  let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                                frameCapacity: AVAudioFrameCount(file.length)) else { continue }
+            guard (try? file.read(into: buffer)) != nil, let samples = buffer.floatChannelData?[0] else { continue }
+            _ = metronome_load_voice_for_sound(storage.pointer, UInt32(sound.rawValue), UInt32(beat),
+                                               samples, buffer.frameLength)
         }
-    }
-
-    private nonisolated static func monoSamples(_ buffer: AVAudioPCMBuffer) -> [Float] {
-        guard buffer.frameLength > 0, buffer.format.sampleRate > 0 else { return [] }
-        let ratio = buffer.format.sampleRate / RenderStorage.sampleRate
-        let outputCount = min(24_000, Int(Double(buffer.frameLength) / ratio))
-        let stride = buffer.stride
-        if let data = buffer.floatChannelData?[0] {
-            return (0..<outputCount).map { data[Int(Double($0) * ratio) * stride] }
-        }
-        if let data = buffer.int16ChannelData?[0] {
-            return (0..<outputCount).map { Float(data[Int(Double($0) * ratio) * stride]) / 32768 }
-        }
-        return []
-    }
-
-    private func receiveVoice(_ samples: [Float], ended: Bool) {
-        if !ended {
-            voiceBuffer.append(contentsOf: samples.prefix(24_000 - voiceBuffer.count))
-            return
-        }
-        if let first = voiceBuffer.firstIndex(where: { abs($0) > 0.012 }) {
-            let clipped = Array(voiceBuffer[max(0, first - 64)...])
-            clipped.withUnsafeBufferPointer {
-                _ = metronome_load_voice(storage.pointer, UInt32(nextVoice), $0.baseAddress, UInt32($0.count))
-            }
-        }
-        voiceBuffer.removeAll(keepingCapacity: true)
-        nextVoice += 1
-        loadingVoice = false
-        loadNextVoice()
     }
 }
 

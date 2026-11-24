@@ -33,7 +33,7 @@ enum BeatRhythm: Int, CaseIterable, Codable, Sendable, Identifiable {
 }
 
 enum BeatSound: Int, CaseIterable, Codable, Sendable, Identifiable {
-    case mechanical, electronic, wood, voice
+    case mechanical, electronic, wood, voice, englishVoice
 
     var id: Self { self }
     var title: String {
@@ -41,7 +41,16 @@ enum BeatSound: Int, CaseIterable, Codable, Sendable, Identifiable {
         case .mechanical: "机械"
         case .electronic: "蜂鸣"
         case .wood: "木鱼"
-        case .voice: "人声"
+        case .voice: "中文人声"
+        case .englishVoice: "英文人声"
+        }
+    }
+
+    var voiceFolder: String? {
+        switch self {
+        case .voice: "zh-CN"
+        case .englishVoice: "en-US"
+        case .mechanical, .electronic, .wood: nil
         }
     }
 }

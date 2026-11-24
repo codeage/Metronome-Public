@@ -32,5 +32,7 @@ bool metronome_event_at(MetronomeRenderer *renderer, double hostSeconds, Metrono
 // Load each beat's mono voice clip once on the control thread. Unloaded clips use the wood sound.
 bool metronome_load_voice(MetronomeRenderer *renderer, uint32_t beat,
                           const float *samples, uint32_t frames);
+bool metronome_load_voice_for_sound(MetronomeRenderer *renderer, uint32_t sound, uint32_t beat,
+                                    const float *samples, uint32_t frames);
 
 #endif
