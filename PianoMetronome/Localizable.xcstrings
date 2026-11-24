@@ -609,54 +609,6 @@
         }
       }
     },
-    "将节拍设为 %@ BPM、%@/%@ 拍": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set Metronome to %@ BPM in %@/%@"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將節拍設為 %@ BPM、%@/%@ 拍"
-          }
-        }
-      }
-    },
-    "将拍号设为 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set Time Signature to %@"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將拍號設為 %@"
-          }
-        }
-      }
-    },
-    "将速度设为每分钟 %@ 拍": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set Tempo to %@ BPM"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將速度設為每分鐘 %@ 拍"
-          }
-        }
-      }
-    },
     "节拍触觉反馈": {
       "localizations": {
         "en": {
@@ -2525,6 +2477,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "搖擺"
+          }
+        }
+      }
+    },
+    "将节拍设为 ${bpm} BPM、${beats}/${unit} 拍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Metronome to ${bpm} BPM in ${beats}/${unit}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將節拍設為 ${bpm} BPM、${beats}/${unit} 拍"
+          }
+        }
+      }
+    },
+    "将速度设为每分钟 ${bpm} 拍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Tempo to ${bpm} BPM"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將速度設為每分鐘 ${bpm} 拍"
+          }
+        }
+      }
+    },
+    "将速度设为每分钟 ${tempo} 拍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Tempo to ${tempo} BPM"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將速度設為每分鐘 ${tempo} 拍"
+          }
+        }
+      }
+    },
+    "将拍号设为 ${meter}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Time Signature to ${meter}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將拍號設為 ${meter}"
           }
         }
       }
