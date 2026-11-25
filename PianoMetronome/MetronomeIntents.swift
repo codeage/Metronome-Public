@@ -168,12 +168,13 @@ struct MetronomeShortcuts: AppShortcutsProvider {
                     shortTitle: "启动节拍器", systemImageName: "play.fill")
         AppShortcut(intent: StopMetronomeIntent(), phrases: ["停止 \(.applicationName)"],
                     shortTitle: "停止节拍器", systemImageName: "stop.fill")
-        AppShortcut(intent: SetMetronomeTempoIntent(),
-                    phrases: ["设置 \(.applicationName) 的速度"],
-                    shortTitle: "设置速度", systemImageName: "metronome")
         AppShortcut(intent: SetSpokenMetronomeTempoIntent(),
-                    phrases: ["把 \(.applicationName) 的速度设为 \(\.$tempo) 拍"],
-                    shortTitle: "指定速度", systemImageName: "metronome")
+                    phrases: [
+                        "把 \(.applicationName) 的速度设为 \(\.$tempo) 拍",
+                        "把 \(.applicationName) 调到 \(\.$tempo) BPM",
+                        "\(.applicationName) 速度改成 \(\.$tempo)"
+                    ],
+                    shortTitle: "设置速度", systemImageName: "metronome")
         AppShortcut(intent: SetMetronomeMeterIntent(),
                     phrases: ["设置 \(.applicationName) 的拍号", "把 \(.applicationName) 的拍号设为 \(\.$meter)"],
                     shortTitle: "设置拍号", systemImageName: "music.note.list")

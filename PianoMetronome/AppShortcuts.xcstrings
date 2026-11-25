@@ -1,6 +1,54 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "${applicationName} 速度改成 ${tempo}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change ${applicationName} tempo to ${tempo}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} 速度改成 ${tempo}"
+          }
+        }
+      }
+    },
+    "停止 ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop ${applicationName}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止 ${applicationName}"
+          }
+        }
+      }
+    },
+    "启动 ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start ${applicationName}"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟動 ${applicationName}"
+          }
+        }
+      }
+    },
     "把 ${applicationName} 的拍号设为 ${meter}": {
       "localizations": {
         "en": {
@@ -33,18 +81,18 @@
         }
       }
     },
-    "启动 ${applicationName}": {
+    "把 ${applicationName} 调到 ${tempo} BPM": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Start ${applicationName}"
+            "value": "Set ${applicationName} to ${tempo} BPM"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "啟動 ${applicationName}"
+            "value": "把 ${applicationName} 調到 ${tempo} BPM"
           }
         }
       }
@@ -61,38 +109,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定 ${applicationName} 的拍號"
-          }
-        }
-      }
-    },
-    "设置 ${applicationName} 的速度": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set ${applicationName} tempo"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定 ${applicationName} 的速度"
-          }
-        }
-      }
-    },
-    "停止 ${applicationName}": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stop ${applicationName}"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "停止 ${applicationName}"
           }
         }
       }
