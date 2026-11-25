@@ -368,7 +368,7 @@ struct MetronomePresetsView: View {
                     Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
                 }
             }
-            .onMove(perform: metronome.movePresets)
+            .onMove(perform: editMode == .active ? metronome.movePresets : nil)
         }
         .navigationTitle("曲目预设")
         .toolbar {
