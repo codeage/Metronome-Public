@@ -1,4 +1,4 @@
-﻿name: Build Metronome for iOS
+name: Build Metronome for iOS
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/codex/verify-preset-drag-415fc07'
     runs-on: macos-26
     timeout-minutes: 15
     steps:
