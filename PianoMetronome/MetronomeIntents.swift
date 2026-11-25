@@ -76,24 +76,6 @@ extension MeterOption: AppEnum {
     ]
 }
 
-struct SetMetronomeTempoIntent: AppIntent {
-    static let title: LocalizedStringResource = "设置节拍器的速度"
-
-    @Parameter(title: "速度", requestValueDialog: "每分钟多少拍？")
-    var bpm: Int
-
-    static var parameterSummary: some ParameterSummary {
-        Summary("将速度设为每分钟 \(\.$bpm) 拍")
-    }
-
-    @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        try await Metronome.shared.subscription.verifyAccess()
-        try Metronome.shared.setTempo(bpm)
-        return .result(dialog: "速度已设为每分钟 \(bpm) 拍。")
-    }
-}
-
 struct SpokenMetronomeTempo: AppEntity {
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "节拍速度"
     static let defaultQuery = SpokenMetronomeTempoQuery()
