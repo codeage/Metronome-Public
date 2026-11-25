@@ -177,11 +177,8 @@ private struct MetronomeView: View {
             case .meter: MeterEditor(metronome: metronome)
             case .presets:
                 NavigationStack {
-                    MetronomePresetsView(metronome: metronome)
+                    MetronomePresetsView(metronome: metronome, showsCloseButton: true)
                         .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) { Button("完成") { self.panel = nil } }
-                        }
                 }
             case .settings: MetronomeSettingsView(metronome: metronome)
             }

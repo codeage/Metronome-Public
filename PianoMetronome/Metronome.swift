@@ -192,7 +192,13 @@ final class Metronome: ObservableObject {
 
     func savePreset(named name: String) {
         guard subscription.hasAccess, let name = Self.cleanedName(name) else { return }
-        presets.append(.init(id: UUID(), name: name, settings: settings))
+        presets.insert(.init(id: UUID(), name: name, settings: settings), at: 0)
+        storePresets()
+    }
+
+    func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
+        guard subscription.hasAccess else { return }
+        presets.move(fromOffsets: source, toOffset: destination)
         storePresets()
     }
 

@@ -327,7 +327,9 @@ struct StableOptionMenu: UIViewRepresentable {
 @MainActor
 struct MetronomePresetsView: View {
     @ObservedObject var metronome: Metronome
+    var showsCloseButton = false
     @Environment(\.dismiss) private var dismiss
+    @State private var editMode: EditMode = .inactive
     @State private var editing: UUID?
     @State private var pendingDeletion: MetronomePreset?
     @State private var name = ""
@@ -337,9 +339,11 @@ struct MetronomePresetsView: View {
         List {
             Section {
                 Button("保存当前设置", systemImage: "plus") { edit(nil) }
+                    .disabled(editMode.isEditing)
             }
             ForEach(metronome.presets) { preset in
                 Button {
+                    guard !editMode.isEditing else { return }
                     do {
                         try metronome.loadPreset(preset)
                         dismiss()
@@ -364,8 +368,22 @@ struct MetronomePresetsView: View {
                     Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
                 }
             }
+            .onMove(perform: metronome.movePresets)
         }
         .navigationTitle("曲目预设")
+        .toolbar {
+            if metronome.presets.count > 1 || editMode.isEditing {
+                ToolbarItem(placement: showsCloseButton ? .topBarLeading : .topBarTrailing) {
+                    EditButton()
+                }
+            }
+            if showsCloseButton && !editMode.isEditing {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .environment(\.editMode, $editMode)
         .alert(editing == nil ? LocalizedStringKey("保存曲目") : LocalizedStringKey("重命名曲目"), isPresented: $naming) {
             TextField("曲目名称", text: $name)
             Button("取消", role: .cancel) {}
