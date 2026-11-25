@@ -221,14 +221,10 @@ struct MetronomeSettingsView: View {
 struct BeatSoundMenu: View {
     @ObservedObject var metronome: Metronome
     let identifier: String
-    var compactWidth: CGFloat?
 
     var body: some View {
         StableOptionMenu(title: String(localized: "音色"), selection: metronome.settings.sound.title,
-                         options: BeatSound.allCases.map(\.title), identifier: identifier,
-                         compactWidth: compactWidth,
-                         fallbackTitle: metronome.settings.sound == .mechanical
-                             ? String(localized: "sound.capsule.mechanical", defaultValue: "机械") : nil) { value in
+                         options: BeatSound.allCases.map(\.title), identifier: identifier) { value in
             if let sound = BeatSound.allCases.first(where: { $0.title == value }) {
                 metronome.setting(\.sound).wrappedValue = sound
             }
@@ -243,8 +239,6 @@ struct StableOptionMenu: UIViewRepresentable {
     let options: [String]
     let identifier: String
     var compactWidth: CGFloat?
-    var displayTitle: String?
-    var fallbackTitle: String?
     let select: (String) -> Void
 
     @MainActor
@@ -293,15 +287,6 @@ struct StableOptionMenu: UIViewRepresentable {
         let chevron = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10))
         let horizontalInset: CGFloat = 7
         let imagePadding: CGFloat = 5
-        let preferredTitle = displayTitle ?? selection
-        let visibleTitle: String
-        if let compactWidth, let fallbackTitle {
-            let textWidth = compactWidth - 2 * horizontalInset - imagePadding - (chevron?.size.width ?? 0)
-            let preferredWidth = (preferredTitle as NSString).size(withAttributes: [.font: font]).width
-            visibleTitle = ceil(preferredWidth) <= textWidth ? preferredTitle : fallbackTitle
-        } else {
-            visibleTitle = preferredTitle
-        }
         var configuration: UIButton.Configuration
         if #available(iOS 26, *) {
             configuration = .glass()
@@ -309,7 +294,7 @@ struct StableOptionMenu: UIViewRepresentable {
             configuration = .filled()
             configuration.baseBackgroundColor = UIColor(MetronomePalette.surface)
         }
-        configuration.title = visibleTitle
+        configuration.title = selection
         if compactWidth != nil {
             configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
                 var attributes = attributes
