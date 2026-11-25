@@ -196,10 +196,11 @@ final class Metronome: ObservableObject {
         storePresets()
     }
 
-    func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
-        guard subscription.hasAccess else { return }
+    func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) -> Bool {
+        guard subscription.hasAccess else { return false }
         presets.move(fromOffsets: source, toOffset: destination)
         storePresets()
+        return true
     }
 
     func renamePreset(_ id: UUID, to name: String) {

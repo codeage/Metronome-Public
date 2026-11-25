@@ -336,39 +336,12 @@ struct MetronomePresetsView: View {
     @State private var naming = false
 
     var body: some View {
-        List {
-            Section {
-                Button("保存当前设置", systemImage: "plus") { edit(nil) }
-                    .disabled(editMode.isEditing)
+        Group {
+            if editMode == .active {
+                PresetReorderList(metronome: metronome)
+            } else {
+                presetList
             }
-            ForEach(metronome.presets) { preset in
-                Button {
-                    guard !editMode.isEditing else { return }
-                    do {
-                        try metronome.loadPreset(preset)
-                        dismiss()
-                    } catch {
-                        metronome.error = error.localizedDescription
-                    }
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(preset.name)
-                        Text("\(preset.settings.bpm) · \(preset.settings.meter) · \(preset.settings.rhythm.title)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .swipeActions(allowsFullSwipe: false) {
-                    Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
-                    Button("重命名", systemImage: "pencil") { edit(preset) }
-                        .tint(.blue)
-                }
-                .contextMenu {
-                    Button("重命名", systemImage: "pencil") { edit(preset) }
-                    Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
-                }
-            }
-            .onMove(perform: editMode == .active ? metronome.movePresets : nil)
         }
         .navigationTitle("曲目预设")
         .toolbar {
@@ -403,9 +376,218 @@ struct MetronomePresetsView: View {
         }
     }
 
+    private var presetList: some View {
+        List {
+            Section {
+                Button("保存当前设置", systemImage: "plus") { edit(nil) }
+            }
+            ForEach(metronome.presets) { preset in
+                Button {
+                    do {
+                        try metronome.loadPreset(preset)
+                        dismiss()
+                    } catch {
+                        metronome.error = error.localizedDescription
+                    }
+                } label: {
+                    PresetRowLabel(preset: preset)
+                }
+                .swipeActions(allowsFullSwipe: false) {
+                    Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
+                    Button("重命名", systemImage: "pencil") { edit(preset) }
+                        .tint(.blue)
+                }
+                .contextMenu {
+                    Button("重命名", systemImage: "pencil") { edit(preset) }
+                    Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
+                }
+            }
+        }
+    }
+
     private func edit(_ preset: MetronomePreset?) {
         editing = preset?.id
         name = preset?.name ?? ""
         naming = true
+    }
+}
+
+private struct PresetRowLabel: View {
+    let preset: MetronomePreset
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(preset.name)
+            Text("\(preset.settings.bpm) · \(preset.settings.meter) · \(preset.settings.rhythm.title)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+@MainActor
+private struct PresetReorderList: UIViewRepresentable {
+    @ObservedObject var metronome: Metronome
+
+    func makeCoordinator() -> Coordinator { Coordinator(metronome: metronome) }
+
+    func makeUIView(context: Context) -> UITableView {
+        let table = UITableView(frame: .zero, style: .insetGrouped)
+        table.register(UITableViewCell.self, forCellReuseIdentifier: "preset")
+        table.dataSource = context.coordinator
+        table.dragDelegate = context.coordinator
+        table.dropDelegate = context.coordinator
+        table.dragInteractionEnabled = true
+        table.allowsSelection = false
+        table.rowHeight = UITableView.automaticDimension
+        table.estimatedRowHeight = 56
+        return table
+    }
+
+    func updateUIView(_ table: UITableView, context: Context) {
+        context.coordinator.reloadIfChanged(table)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, UITableViewDataSource, UITableViewDragDelegate, UITableViewDropDelegate {
+        private let metronome: Metronome
+        private var presets: [MetronomePreset]
+        private let presetsSection = 1
+
+        init(metronome: Metronome) {
+            self.metronome = metronome
+            presets = metronome.presets
+        }
+
+        func reloadIfChanged(_ table: UITableView) {
+            guard !table.hasActiveDrag, presets != metronome.presets else { return }
+            presets = metronome.presets
+            table.reloadData()
+        }
+
+        func numberOfSections(in tableView: UITableView) -> Int { 2 }
+
+        func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+            section == presetsSection ? presets.count : 1
+        }
+
+        func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "preset", for: indexPath)
+            if indexPath.section == presetsSection {
+                let preset = presets[indexPath.row]
+                cell.contentConfiguration = UIHostingConfiguration {
+                    HStack {
+                        PresetRowLabel(preset: preset)
+                        Spacer(minLength: 8)
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                }
+                cell.accessibilityCustomActions = [
+                    moveAction(String(localized: "上移"), by: -1, preset: preset.id, in: tableView),
+                    moveAction(String(localized: "下移"), by: 1, preset: preset.id, in: tableView)
+                ]
+            } else {
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Label("保存当前设置", systemImage: "plus")
+                        .foregroundStyle(.secondary)
+                        .disabled(true)
+                }
+                cell.accessibilityCustomActions = nil
+            }
+            return cell
+        }
+
+        func tableView(_ tableView: UITableView, itemsForBeginning session: UIDragSession,
+                       at indexPath: IndexPath) -> [UIDragItem] {
+            guard indexPath.section == presetsSection, presets.count > 1,
+                  let cell = tableView.cellForRow(at: indexPath) else { return [] }
+            let preset = presets[indexPath.row]
+            session.localContext = self
+            let item = UIDragItem(itemProvider: NSItemProvider(object: preset.id.uuidString as NSString))
+            item.localObject = preset.id
+            let preview = makePreview(for: preset.name, cell: cell)
+            item.previewProvider = { preview }
+            return [item]
+        }
+
+        func tableView(_ tableView: UITableView, dragSessionIsRestrictedToDraggingApplication session: UIDragSession) -> Bool {
+            true
+        }
+
+        func tableView(_ tableView: UITableView, dragSessionDidEnd session: UIDragSession) {
+            Task { reloadIfChanged(tableView) }
+        }
+
+        func tableView(_ tableView: UITableView, canHandle session: UIDropSession) -> Bool {
+            session.localDragSession?.localContext as? Coordinator === self && session.items.count == 1
+        }
+
+        func tableView(_ tableView: UITableView, dropSessionDidUpdate session: UIDropSession,
+                       withDestinationIndexPath destinationIndexPath: IndexPath?) -> UITableViewDropProposal {
+            guard self.tableView(tableView, canHandle: session),
+                  destinationIndexPath?.section == presetsSection else {
+                return UITableViewDropProposal(operation: .cancel)
+            }
+            return UITableViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+        }
+
+        func tableView(_ tableView: UITableView, performDropWith coordinator: UITableViewDropCoordinator) {
+            guard let item = coordinator.items.first, let source = item.sourceIndexPath,
+                  let id = item.dragItem.localObject as? UUID,
+                  let proposed = coordinator.destinationIndexPath, proposed.section == presetsSection,
+                  source.section == presetsSection, presets.indices.contains(source.row),
+                  presets[source.row].id == id, presets == metronome.presets else { return }
+            let destination = IndexPath(row: min(proposed.row, presets.count - 1), section: presetsSection)
+            if source == destination || move(in: tableView, from: source, to: destination) {
+                coordinator.drop(item.dragItem, toRowAt: destination)
+            }
+        }
+
+        private func move(in table: UITableView, from source: IndexPath, to destination: IndexPath) -> Bool {
+            let offset = destination.row > source.row ? destination.row + 1 : destination.row
+            guard metronome.movePresets(fromOffsets: IndexSet(integer: source.row), toOffset: offset) else {
+                return false
+            }
+            table.performBatchUpdates {
+                presets = metronome.presets
+                table.deleteRows(at: [source], with: .automatic)
+                table.insertRows(at: [destination], with: .automatic)
+            }
+            return true
+        }
+
+        private func moveAction(_ title: String, by offset: Int, preset: UUID,
+                                in table: UITableView) -> UIAccessibilityCustomAction {
+            UIAccessibilityCustomAction(name: title) { [weak self, weak table] _ in
+                guard let self, let table, presets == metronome.presets,
+                      let row = presets.firstIndex(where: { $0.id == preset }),
+                      presets.indices.contains(row + offset) else { return false }
+                return move(in: table, from: IndexPath(row: row, section: presetsSection),
+                            to: IndexPath(row: row + offset, section: presetsSection))
+            }
+        }
+
+        private func makePreview(for name: String, cell: UITableViewCell) -> UIDragPreview {
+            let bounds = CGRect(x: 0, y: 0, width: min(cell.bounds.width * 0.75, 360), height: cell.bounds.height)
+            let capsule = UIView(frame: bounds)
+            capsule.backgroundColor = UIColor.tertiarySystemGroupedBackground.resolvedColor(with: cell.traitCollection)
+            capsule.layer.cornerRadius = bounds.height / 2
+
+            let label = UILabel(frame: bounds.insetBy(dx: 20, dy: 0))
+            label.text = name
+            label.font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: cell.traitCollection)
+            label.textColor = UIColor.label.resolvedColor(with: cell.traitCollection)
+            label.lineBreakMode = .byTruncatingTail
+            capsule.addSubview(label)
+
+            let path = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height / 2)
+            let parameters = UIDragPreviewParameters()
+            parameters.backgroundColor = .clear
+            parameters.visiblePath = path
+            parameters.shadowPath = path
+            return UIDragPreview(view: capsule, parameters: parameters)
+        }
     }
 }
