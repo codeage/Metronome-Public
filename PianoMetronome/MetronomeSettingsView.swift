@@ -551,7 +551,7 @@ private struct PresetReorderList: UIViewRepresentable {
                 return false
             }
             table.performBatchUpdates {
-                presets = metronome.presets
+                self.presets = self.metronome.presets
                 table.deleteRows(at: [source], with: .automatic)
                 table.insertRows(at: [destination], with: .automatic)
             }
