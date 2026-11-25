@@ -212,7 +212,7 @@ struct MetronomeSubscriptionView: View {
                         .disabled(busy)
                 }
 
-                if !buyoutOnly && !loading && annual == nil && subscription.canContinueTesting {
+                if !buyoutOnly && subscription.canContinueTesting {
                     purchaseButton("继续测试") { subscription.continueTesting() }
                     Text("仅本次启动有效。")
                         .font(.footnote)
@@ -226,6 +226,9 @@ struct MetronomeSubscriptionView: View {
             .frame(maxWidth: .infinity)
         }
         .task { await loadProducts() }
+        .task {
+            if !buyoutOnly { await subscription.checkTestBuild() }
+        }
         .manageSubscriptionsSheet(isPresented: $showingManagement)
         .onChange(of: showingManagement) { _, isShowing in
             if !isShowing { Task { await refreshStore() } }
@@ -328,9 +331,6 @@ struct MetronomeSubscriptionView: View {
             products = availableProducts
         } catch {
             if !Task.isCancelled && products.isEmpty { message = error.localizedDescription }
-        }
-        if !Task.isCancelled && !buyoutOnly && annual == nil {
-            await subscription.checkTestBuild()
         }
     }
 
