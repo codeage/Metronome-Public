@@ -230,12 +230,14 @@ private struct MetronomeView: View {
 
     private func soundControls(width: CGFloat) -> some View {
         let spacing: CGFloat = 8
-        let capsuleWidth = max(0, (width - 2 * spacing) / 3)
+        let availableWidth = max(0, width - 2 * spacing)
+        let meterWidth = min(100, availableWidth * 0.27)
+        let optionWidth = (availableWidth - meterWidth) / 2
         return HStack(spacing: spacing) {
             StableOptionMenu(
                 title: String(localized: "拍号"), selection: metronome.settings.meter,
                 options: MeterOption.allCases.map(\.rawValue) + [String(localized: "自定义拍号")],
-                identifier: "meter-option", compactTitle: true
+                identifier: "meter-option", compactWidth: meterWidth
             ) { value in
                 guard let meter = MeterOption(rawValue: value) else {
                     panel = .meter
@@ -245,20 +247,23 @@ private struct MetronomeView: View {
                 meter.apply(to: &settings)
                 metronome.perform { try metronome.update(settings) }
             }
-            .frame(width: capsuleWidth, height: 44)
+            .frame(width: meterWidth, height: 44)
 
             StableOptionMenu(
                 title: String(localized: "细分节奏"), selection: metronome.settings.rhythm.title,
-                options: BeatRhythm.allCases.map(\.title), identifier: "rhythm-option", compactTitle: true
+                options: BeatRhythm.allCases.map(\.title), identifier: "rhythm-option",
+                compactWidth: optionWidth, displayTitle: metronome.settings.rhythm.capsuleTitle,
+                fallbackTitle: metronome.settings.rhythm == .syncopated
+                    ? String(localized: "rhythm.capsule.syncopated", defaultValue: "切分") : nil
             ) { value in
                 if let rhythm = BeatRhythm.allCases.first(where: { $0.title == value }) {
                     metronome.setting(\.rhythm).wrappedValue = rhythm
                 }
             }
-            .frame(width: capsuleWidth, height: 44)
+            .frame(width: optionWidth, height: 44)
 
-            BeatSoundMenu(metronome: metronome, identifier: "sound-option", compactTitle: true)
-                .frame(width: capsuleWidth, height: 44)
+            BeatSoundMenu(metronome: metronome, identifier: "sound-option", compactWidth: optionWidth)
+                .frame(width: optionWidth, height: 44)
         }
     }
 
@@ -381,6 +386,17 @@ private struct MetronomeView: View {
             metronome.preferences.haptics && new - old == delta
         }
         .accessibilityLabel(label)
+    }
+}
+
+private extension BeatRhythm {
+    var capsuleTitle: String {
+        switch self {
+        case .quarter: String(localized: "rhythm.capsule.quarter", defaultValue: "四分音符")
+        case .eighth: String(localized: "rhythm.capsule.eighth", defaultValue: "八分音符")
+        case .sixteenth: String(localized: "rhythm.capsule.sixteenth", defaultValue: "十六分音符")
+        default: title
+        }
     }
 }
 

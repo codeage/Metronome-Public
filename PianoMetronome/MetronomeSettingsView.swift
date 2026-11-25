@@ -221,12 +221,14 @@ struct MetronomeSettingsView: View {
 struct BeatSoundMenu: View {
     @ObservedObject var metronome: Metronome
     let identifier: String
-    var compactTitle = false
+    var compactWidth: CGFloat?
 
     var body: some View {
         StableOptionMenu(title: String(localized: "音色"), selection: metronome.settings.sound.title,
                          options: BeatSound.allCases.map(\.title), identifier: identifier,
-                         compactTitle: compactTitle) { value in
+                         compactWidth: compactWidth,
+                         fallbackTitle: metronome.settings.sound == .mechanical
+                             ? String(localized: "sound.capsule.mechanical", defaultValue: "机械") : nil) { value in
             if let sound = BeatSound.allCases.first(where: { $0.title == value }) {
                 metronome.setting(\.sound).wrappedValue = sound
             }
@@ -240,13 +242,18 @@ struct StableOptionMenu: UIViewRepresentable {
     let selection: String
     let options: [String]
     let identifier: String
-    var compactTitle = false
+    var compactWidth: CGFloat?
+    var displayTitle: String?
+    var fallbackTitle: String?
     let select: (String) -> Void
 
     @MainActor
     final class Coordinator {
         var selection: String?
         var options: [String] = []
+        var accessibilityTitle: String?
+        var contentSizeCategory: UIContentSizeCategory?
+        var compactWidth: CGFloat?
         var select: ((String) -> Void)?
     }
 
@@ -257,17 +264,44 @@ struct StableOptionMenu: UIViewRepresentable {
         button.showsMenuAsPrimaryAction = true
         button.preferredMenuElementOrder = .fixed
         button.accessibilityIdentifier = identifier
+        if compactWidth != nil {
+            button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
         return button
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
+        guard let compactWidth else { return nil }
+        return CGSize(width: compactWidth, height: proposal.height ?? 44)
     }
 
     func updateUIView(_ button: UIButton, context: Context) {
         let coordinator = context.coordinator
         coordinator.select = select
+        let category = button.traitCollection.preferredContentSizeCategory
+        let menuChanged = coordinator.selection != selection || coordinator.options != options
         // Playback can redraw the parent on every beat. Keep the open menu and its selection intact.
-        guard coordinator.selection != selection || coordinator.options != options else { return }
+        guard menuChanged || coordinator.accessibilityTitle != title || coordinator.contentSizeCategory != category
+                || coordinator.compactWidth != compactWidth else { return }
         coordinator.selection = selection
         coordinator.options = options
+        coordinator.accessibilityTitle = title
+        coordinator.contentSizeCategory = category
+        coordinator.compactWidth = compactWidth
 
+        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: button.traitCollection)
+        let chevron = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10))
+        let horizontalInset: CGFloat = 7
+        let imagePadding: CGFloat = 5
+        let preferredTitle = displayTitle ?? selection
+        let visibleTitle: String
+        if let compactWidth, let fallbackTitle {
+            let textWidth = compactWidth - 2 * horizontalInset - imagePadding - (chevron?.size.width ?? 0)
+            let preferredWidth = (preferredTitle as NSString).size(withAttributes: [.font: font]).width
+            visibleTitle = ceil(preferredWidth) <= textWidth ? preferredTitle : fallbackTitle
+        } else {
+            visibleTitle = preferredTitle
+        }
         var configuration: UIButton.Configuration
         if #available(iOS 26, *) {
             configuration = .glass()
@@ -275,9 +309,8 @@ struct StableOptionMenu: UIViewRepresentable {
             configuration = .filled()
             configuration.baseBackgroundColor = UIColor(MetronomePalette.surface)
         }
-        configuration.title = selection
-        if compactTitle {
-            let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: button.traitCollection)
+        configuration.title = visibleTitle
+        if compactWidth != nil {
             configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
                 var attributes = attributes
                 attributes.font = font
@@ -286,21 +319,23 @@ struct StableOptionMenu: UIViewRepresentable {
         }
         configuration.baseForegroundColor = UIColor(MetronomePalette.cyan)
         configuration.cornerStyle = .capsule
-        configuration.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10))
+        configuration.image = chevron
         configuration.imagePlacement = .trailing
-        configuration.imagePadding = 5
-        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 7, bottom: 0, trailing: 7)
+        configuration.imagePadding = imagePadding
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: horizontalInset, bottom: 0, trailing: horizontalInset)
         configuration.titleLineBreakMode = .byTruncatingTail
         button.configuration = configuration
         button.titleLabel?.minimumScaleFactor = 0.6
         button.titleLabel?.adjustsFontSizeToFitWidth = true
         button.accessibilityLabel = title
         button.accessibilityValue = selection
-        button.menu = UIMenu(children: options.map { option in
-            UIAction(title: option, state: option == selection ? .on : .off) { [weak coordinator] _ in
-                coordinator?.select?(option)
-            }
-        })
+        if menuChanged {
+            button.menu = UIMenu(children: options.map { option in
+                UIAction(title: option, state: option == selection ? .on : .off) { [weak coordinator] _ in
+                    coordinator?.select?(option)
+                }
+            })
+        }
     }
 }
 
