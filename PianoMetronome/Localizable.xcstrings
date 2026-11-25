@@ -182,7 +182,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keep Screen Awake While Playing"
+            "value": "Keep screen awake while playing"
           }
         },
         "zh-Hant": {
@@ -614,7 +614,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beat Haptics"
+            "value": "Beat haptics"
           }
         },
         "zh-Hant": {
@@ -774,7 +774,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable Silent Bars"
+            "value": "Enable silent bars"
           }
         },
         "zh-Hant": {
@@ -790,7 +790,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable Speed Trainer"
+            "value": "Enable speed trainer"
           }
         },
         "zh-Hant": {
@@ -838,7 +838,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow Up to 32 Beats per Bar"
+            "value": "Allow up to 32 beats per bar"
           }
         },
         "zh-Hant": {
@@ -2006,7 +2006,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show Italian Tempo Markings"
+            "value": "Show Italian tempo markings"
           }
         },
         "zh-Hant": {
@@ -2214,7 +2214,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mix with Other Apps"
+            "value": "Mix with other apps"
           }
         },
         "zh-Hant": {
@@ -2246,7 +2246,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Flash Dial on Each Beat"
+            "value": "Flash dial on each beat"
           }
         },
         "zh-Hant": {
@@ -2422,7 +2422,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Extended Tempo Range (20–300)"
+            "value": "Extended tempo range (20–300)"
           }
         },
         "zh-Hant": {
