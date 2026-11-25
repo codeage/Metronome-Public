@@ -4,8 +4,12 @@ import SwiftUI
 
 @MainActor
 final class MetronomeSubscription: ObservableObject {
-    static let annualProductID = "app.music.metronome.annual"
-    static let lifetimeProductID = "app.music.metronome.lifetime"
+    static let annualProductID = "com.bytereset.metronome.annual"
+    static let lifetimeProductID = "com.bytereset.metronome.lifetime"
+
+    // Keep recognizing transactions from TestFlight builds that offered the original products.
+    private static let annualEntitlementIDs: Set<String> = [annualProductID, "app.music.metronome.annual"]
+    private static let lifetimeEntitlementIDs: Set<String> = [lifetimeProductID, "app.music.metronome.lifetime"]
 
     private enum Access: Equatable {
         case checking, locked, active(until: Date), lifetime
@@ -72,7 +76,8 @@ final class MetronomeSubscription: ObservableObject {
     func accept(_ result: VerificationResult<StoreKit.Transaction>) async -> Bool {
         guard case .verified(let transaction) = result else { return false }
         switch (transaction.productID, transaction.productType) {
-        case (Self.annualProductID, .autoRenewable), (Self.lifetimeProductID, .nonConsumable):
+        case (let id, .autoRenewable) where Self.annualEntitlementIDs.contains(id),
+             (let id, .nonConsumable) where Self.lifetimeEntitlementIDs.contains(id):
             await refresh()
             await transaction.finish()
             return true
@@ -100,14 +105,14 @@ final class MetronomeSubscription: ObservableObject {
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.revocationDate == nil else { continue }
-            if transaction.productID == Self.lifetimeProductID, transaction.productType == .nonConsumable {
+            if Self.lifetimeEntitlementIDs.contains(transaction.productID), transaction.productType == .nonConsumable {
                 expirationTask?.cancel()
                 expirationTask = nil
                 if !ownsLifetime { access = .lifetime }
                 if testingSession { testingSession = false }
                 return
             }
-            guard transaction.productID == Self.annualProductID,
+            guard Self.annualEntitlementIDs.contains(transaction.productID),
                   transaction.productType == .autoRenewable,
                   !transaction.isUpgraded,
                   let expiration = transaction.expirationDate else { continue }
