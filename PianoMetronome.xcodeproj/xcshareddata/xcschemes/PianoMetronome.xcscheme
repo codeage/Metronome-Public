@@ -18,6 +18,9 @@
             <TestableReference skipped="NO" parallelizable="NO">
                 <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0000000000000000000000B8" BuildableName="MetronomeIntegrationTests.xctest" BlueprintName="MetronomeIntegrationTests" ReferencedContainer="container:PianoMetronome.xcodeproj"/>
             </TestableReference>
+            <TestableReference skipped="NO" parallelizable="NO">
+                <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0000000000000000000000C5" BuildableName="MetronomeUITests.xctest" BlueprintName="MetronomeUITests" ReferencedContainer="container:PianoMetronome.xcodeproj"/>
+            </TestableReference>
         </Testables>
     </TestAction>
     <LaunchAction buildConfiguration="Debug" launchStyle="0" useCustomWorkingDirectory="NO">

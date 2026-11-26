@@ -35,6 +35,7 @@
         000000000000000000000020 = {isa = PBXBuildFile; fileRef = 00000000000000000000003C; };
         0000000000000000000000B0 = {isa = PBXBuildFile; fileRef = 0000000000000000000000B1; };
         0000000000000000000000B2 = {isa = PBXBuildFile; fileRef = 0000000000000000000000B3; };
+        0000000000000000000000C0 = {isa = PBXBuildFile; fileRef = 0000000000000000000000C1; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,13 @@
             remoteInfo = MetronomeActivity;
         };
         0000000000000000000000BA = {
+            isa = PBXContainerItemProxy;
+            containerPortal = 000000000000000000000061;
+            proxyType = 1;
+            remoteGlobalIDString = 000000000000000000000051;
+            remoteInfo = PianoMetronome;
+        };
+        0000000000000000000000C7 = {
             isa = PBXContainerItemProxy;
             containerPortal = 000000000000000000000061;
             proxyType = 1;
@@ -98,6 +106,8 @@
         0000000000000000000000B1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeIntegrationTests.swift; sourceTree = "<group>"; };
         0000000000000000000000B3 = {isa = PBXFileReference; lastKnownFileType = text; path = MetronomeTestProducts.storekit; sourceTree = "<group>"; };
         0000000000000000000000B4 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MetronomeIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        0000000000000000000000C1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeUITests.swift; sourceTree = "<group>"; };
+        0000000000000000000000C2 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MetronomeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +115,7 @@
         000000000000000000000035 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         000000000000000000000038 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         0000000000000000000000B6 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        0000000000000000000000C4 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -115,14 +126,14 @@
             path = PianoMetronome;
             sourceTree = "<group>";
         };
-        000000000000000000000043 /* Products */ = {isa = PBXGroup; children = (000000000000000000000025, 00000000000000000000002A, 00000000000000000000003D, 0000000000000000000000B4, ); name = Products; sourceTree = "<group>"; };
+        000000000000000000000043 /* Products */ = {isa = PBXGroup; children = (000000000000000000000025, 00000000000000000000002A, 00000000000000000000003D, 0000000000000000000000B4, 0000000000000000000000C2, ); name = Products; sourceTree = "<group>"; };
         000000000000000000000044 /* MetronomeActivity */ = {
             isa = PBXGroup;
             children = (000000000000000000000028, 000000000000000000000029, );
             path = MetronomeActivity;
             sourceTree = "<group>";
         };
-        000000000000000000000045 /* Tests */ = {isa = PBXGroup; children = (00000000000000000000003B, 00000000000000000000003C, 0000000000000000000000B1, 0000000000000000000000B3, ); path = Tests; sourceTree = "<group>"; };
+        000000000000000000000045 /* Tests */ = {isa = PBXGroup; children = (00000000000000000000003B, 00000000000000000000003C, 0000000000000000000000B1, 0000000000000000000000B3, 0000000000000000000000C1, ); path = Tests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -170,6 +181,17 @@
             productReference = 0000000000000000000000B4;
             productType = "com.apple.product-type.bundle.unit-test";
         };
+        0000000000000000000000C5 /* MetronomeUITests */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = 0000000000000000000000CA;
+            buildPhases = (0000000000000000000000C3, 0000000000000000000000C4, );
+            buildRules = ();
+            dependencies = (0000000000000000000000C6, );
+            name = MetronomeUITests;
+            productName = MetronomeUITests;
+            productReference = 0000000000000000000000C2;
+            productType = "com.apple.product-type.bundle.ui-testing";
+        };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -185,7 +207,7 @@
             productRefGroup = 000000000000000000000043;
             projectDirPath = "";
             projectRoot = "";
-            targets = (000000000000000000000051, 000000000000000000000052, 000000000000000000000053, 0000000000000000000000B8, );
+            targets = (000000000000000000000051, 000000000000000000000052, 000000000000000000000053, 0000000000000000000000B8, 0000000000000000000000C5, );
         };
 /* End PBXProject section */
 
@@ -220,6 +242,7 @@
         };
         000000000000000000000037 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000001E, 00000000000000000000001F, 000000000000000000000010, 000000000000000000000020, ); runOnlyForDeploymentPostprocessing = 0; };
         0000000000000000000000B5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000B0, ); runOnlyForDeploymentPostprocessing = 0; };
+        0000000000000000000000C3 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000C0, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
@@ -241,6 +264,11 @@
             isa = PBXTargetDependency;
             target = 000000000000000000000051;
             targetProxy = 0000000000000000000000BA;
+        };
+        0000000000000000000000C6 = {
+            isa = PBXTargetDependency;
+            target = 000000000000000000000051;
+            targetProxy = 0000000000000000000000C7;
         };
 /* End PBXTargetDependency section */
 
@@ -396,6 +424,30 @@
                 TARGETED_DEVICE_FAMILY = "1,2";
             };
         };
+        0000000000000000000000C8 = {
+            isa = XCBuildConfiguration;
+            name = Debug;
+            buildSettings = {
+                GENERATE_INFOPLIST_FILE = YES;
+                PRODUCT_BUNDLE_IDENTIFIER = com.bytereset.metronome.uitests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                TEST_TARGET_NAME = PianoMetronome;
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+        };
+        0000000000000000000000C9 = {
+            isa = XCBuildConfiguration;
+            name = Release;
+            buildSettings = {
+                GENERATE_INFOPLIST_FILE = YES;
+                PRODUCT_BUNDLE_IDENTIFIER = com.bytereset.metronome.uitests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                TEST_TARGET_NAME = PianoMetronome;
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+        };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -404,6 +456,7 @@
         000000000000000000000083 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000075, 000000000000000000000076, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         000000000000000000000084 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000079, 00000000000000000000007A, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         0000000000000000000000BD = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000BB, 0000000000000000000000BC, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+        0000000000000000000000CA = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000C8, 0000000000000000000000C9, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
     };
     rootObject = 000000000000000000000061;
