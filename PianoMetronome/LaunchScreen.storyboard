@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23094" targetRuntime="iOS.CocoaTouch" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="launch-controller">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
@@ -18,7 +18,7 @@
                                 <rect key="frame" x="90.39" y="319.89" width="212.22" height="212.22"/>
                             </imageView>
                         </subviews>
-                        <color key="backgroundColor" red="0.807843137254902" green="0.8980392156862745" blue="0.9450980392156862" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <color key="backgroundColor" name="MetronomeBackground"/>
                         <constraints>
                             <constraint firstItem="launch-metronome" firstAttribute="centerX" secondItem="launch-background" secondAttribute="centerX" id="launch-center-x"/>
                             <constraint firstItem="launch-metronome" firstAttribute="centerY" secondItem="launch-background" secondAttribute="centerY" id="launch-center-y"/>
@@ -35,5 +35,8 @@
     </scenes>
     <resources>
         <image name="LaunchMetronome" width="1024" height="1024"/>
+        <namedColor name="MetronomeBackground">
+            <color red="0.02" green="0.08" blue="0.17" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
     </resources>
 </document>

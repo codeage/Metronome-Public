@@ -36,7 +36,7 @@ final class MetronomeSubscription: ObservableObject {
         }
     }
 
-    var isChecking: Bool { access == .checking }
+    var needsPurchase: Bool { access == .locked && !hasAccess }
     var ownsLifetime: Bool { access == .lifetime }
 
     var hasAccess: Bool {
