@@ -16,13 +16,15 @@ struct PianoMetronomeApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if subscription.hasAccess {
-                    MetronomeView(metronome: metronome)
-                } else if subscription.isChecking {
-                    ProgressView("正在检查订阅…")
-                } else {
-                    MetronomeSubscriptionView(subscription: subscription)
-                }
+                MetronomeView(metronome: metronome)
+                    .disabled(!subscription.hasAccess)
+            }
+            .sheet(isPresented: Binding(
+                get: { subscription.needsPurchase },
+                set: { _ in }
+            )) {
+                MetronomeSubscriptionView(subscription: subscription)
+                    .interactiveDismissDisabled()
             }
             .onOpenURL { url in
                 Task { await metronome.handle(url) }
@@ -38,7 +40,7 @@ struct PianoMetronomeApp: App {
                 if scenePhase == .active { await subscription.refresh() }
             }
             .alert("有新版本", isPresented: Binding(
-                get: { availableUpdate != nil },
+                get: { subscription.hasAccess && availableUpdate != nil },
                 set: { if !$0 { availableUpdate = nil } }
             ), presenting: availableUpdate) { update in
                 Button(update.destination.buttonTitle) { openUpdate(update.destination) }
@@ -79,7 +81,7 @@ enum MeterOption: String, CaseIterable, Sendable, Identifiable {
 }
 
 enum MetronomePalette {
-    static let background = Color(red: 0.02, green: 0.08, blue: 0.17)
+    static let background = Color("MetronomeBackground")
     static let surface = Color(red: 0.10, green: 0.19, blue: 0.32)
     static let track = Color(red: 0.16, green: 0.29, blue: 0.46)
     static let cyan = Color(red: 0.44, green: 0.89, blue: 0.98)
