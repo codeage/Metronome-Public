@@ -1,0 +1,53 @@
+name: Metronome simulator tests
+on:
+  push:
+    branches: [qa/metronome-simulator]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Select and boot iPhone
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/devices.json"
+          device="$(python3 -c 'import json,sys; ds=[d for r,arr in json.load(open(sys.argv[1]))["devices"].items() if ".iOS-" in r for d in arr if d["name"]=="iPhone 17 Pro"]; print(ds[-1]["udid"])' "$RUNNER_TEMP/devices.json")"
+          echo "DEVICE=$device" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+      - name: Run XCTest serially
+        run: |
+          set -euo pipefail
+          xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
+            -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" \
+            -derivedDataPath "$RUNNER_TEMP/MetronomeSim" -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/MetronomeTests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+      - name: Exercise playback URL on the simulator
+        if: success()
+        run: |
+          set -euo pipefail
+          xcrun simctl terminate "$DEVICE" com.bytereset.metronome || true
+          xcrun simctl launch "$DEVICE" com.bytereset.metronome --metronome-layout-preview
+          sleep 2
+          xcrun simctl io "$DEVICE" screenshot "$RUNNER_TEMP/metronome-idle.png"
+          xcrun simctl openurl "$DEVICE" 'bytereset-metronome://start?bpm=137&beats=5&unit=4'
+          sleep 2
+          xcrun simctl io "$DEVICE" screenshot "$RUNNER_TEMP/metronome-playing.png"
+          xcrun simctl openurl "$DEVICE" 'bytereset-metronome://stop'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: metronome-simulator-results
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/MetronomeTests.xcresult
+            ${{ runner.temp }}/xcodebuild.log
+            ${{ runner.temp }}/metronome-*.png
