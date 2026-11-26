@@ -42,7 +42,6 @@ jobs:
           )"
           echo "DEVICE=$device" >> "$GITHUB_ENV"
           xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
       - name: Run XCTest serially
         run: |
           set -euo pipefail
@@ -51,12 +50,12 @@ jobs:
             scope=(-only-testing:MetronomeUITests)
           fi
           xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
-            -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" \
+            -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE,arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/MetronomeSim" -parallel-testing-enabled NO \
             -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
             -maximum-test-execution-time-allowance 180 \
             -resultBundlePath "$RUNNER_TEMP/MetronomeTests.xcresult" \
-            "${scope[@]}" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+            "${scope[@]}" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
       - name: Exercise playback URL on the simulator
         if: success() && matrix.profile == 'pro'
         run: |

@@ -85,8 +85,9 @@ final class MetronomeIntegrationTests: XCTestCase {
 
         let id = MetronomeSubscription.annualProductID
         let access = MetronomeSubscription()
-        let original = try session.buyProduct(productIdentifier: id)
+        try session.buyProduct(productIdentifier: id)
         try await access.verifyAccess()
+        let original = try XCTUnwrap(session.allTransactions().first { $0.productIdentifier == id })
         try session.forceRenewalOfSubscription(productIdentifier: id)
         try await access.verifyAccess()
         let transactions = session.allTransactions().filter { $0.productIdentifier == id }
@@ -140,8 +141,8 @@ final class MetronomeIntegrationTests: XCTestCase {
         defer { session.clearTransactions() }
 
         let annualID = MetronomeSubscription.annualProductID
-        _ = try session.buyProduct(productIdentifier: annualID)
-        _ = try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
+        try session.buyProduct(productIdentifier: annualID)
+        try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
         let access = MetronomeSubscription()
         try await access.verifyAccess()
         XCTAssertTrue(access.ownsLifetime)
@@ -168,7 +169,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         } catch MetronomeError.subscriptionRequired {}
 
         let annualID = MetronomeSubscription.annualProductID
-        _ = try session.buyProduct(productIdentifier: annualID)
+        try session.buyProduct(productIdentifier: annualID)
         metronome.error = nil
         await metronome.handle(url)
         XCTAssertNil(metronome.error)
@@ -192,7 +193,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         let session = try freshStore()
         defer { session.clearTransactions() }
 
-        _ = try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
+        try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
         let metronome = Metronome.shared
         try await metronome.subscription.verifyAccess()
         let original = metronome.settings
@@ -226,7 +227,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         let session = try freshStore()
         defer { session.clearTransactions() }
 
-        _ = try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
+        try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
         let metronome = Metronome.shared
         try await metronome.subscription.verifyAccess()
         let original = metronome.settings
