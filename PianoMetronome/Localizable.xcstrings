@@ -1025,18 +1025,18 @@
         }
       }
     },
-    "免费试用 7 天，之后按上方年费自动续订。如不想续订，请在试用结束至少 24 小时前取消。": {
+    "免费试用 7 天，之后以 %@/年自动续订。如不想续订，请在试用结束至少 24 小时前取消。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Try it free for 7 days, then the subscription renews annually at the price shown above. To avoid renewal, cancel at least 24 hours before the trial ends."
+            "value": "Try it free for 7 days, then the subscription renews automatically at %@ per year. To avoid renewal, cancel at least 24 hours before the trial ends."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "免費試用 7 天，之後按上方年費自動續訂。若不想續訂，請在試用結束至少 24 小時前取消。"
+            "value": "免費試用 7 天，之後以 %@／年自動續訂。若不想續訂，請在試用結束至少 24 小時前取消。"
           }
         }
       }

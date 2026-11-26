@@ -118,7 +118,21 @@ struct MetronomeSettingsView: View {
                             MetronomeSubscriptionView(subscription: subscription, buyoutOnly: true)
                         }
                     }
-                    Button("管理订阅") { showingSubscriptionManagement = true }
+                    Button {
+                        showingSubscriptionManagement = true
+                    } label: {
+                        HStack {
+                            Text("管理订阅")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.forward")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                                .accessibilityHidden(true)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
             }

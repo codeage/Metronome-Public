@@ -181,9 +181,11 @@ struct MetronomeSubscriptionView: View {
 
                 if !buyoutOnly {
                     purchaseCard("年度订阅", price: annual.map { String(localized: "\($0.displayPrice) / 年") }) {
-                        Text(showsFreeTrial
-                             ? LocalizedStringKey("免费试用 7 天，之后按上方年费自动续订。如不想续订，请在试用结束至少 24 小时前取消。")
-                             : LocalizedStringKey("按年自动续订，可在 App Store 管理或取消。"))
+                        if let annual, showsFreeTrial {
+                            Text("免费试用 7 天，之后以 \(annual.displayPrice)/年自动续订。如不想续订，请在试用结束至少 24 小时前取消。")
+                        } else {
+                            Text("按年自动续订，可在 App Store 管理或取消。")
+                        }
                         if let annual {
                             purchaseButton(showsFreeTrial ? LocalizedStringKey("开始 7 天免费试用") : LocalizedStringKey("订阅一年")) {
                                 Task { await buy(annual) }
