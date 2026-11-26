@@ -133,6 +133,7 @@ struct MetronomeSettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    MetronomeSubscriptionDiagnosticsView(subscription: subscription)
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
                 Section("关于") {
@@ -152,9 +153,7 @@ struct MetronomeSettingsView: View {
         }
         .manageSubscriptionsSheet(isPresented: $showingSubscriptionManagement)
         .onChange(of: showingSubscriptionManagement) { _, isShowing in
-            if isShowing {
-                Task { await subscription.logSubscriptionDiagnostics() }
-            } else {
+            if !isShowing {
                 Task { await subscription.refresh() }
             }
         }

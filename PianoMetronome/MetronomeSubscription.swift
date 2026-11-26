@@ -19,12 +19,12 @@ final class MetronomeSubscription: ObservableObject {
     @Published private var access: Access = .checking
     @Published private var testingSession = false
     @Published private(set) var canContinueTesting = false
+    @Published private(set) var subscriptionDiagnostics: String?
+    @Published private(set) var isLoadingSubscriptionDiagnostics = false
     var onAccessLost: (() -> Void)?
 
     private var refreshTask: Task<Void, Never>?
     private var expirationTask: Task<Void, Never>?
-    private var isLoggingSubscriptionDiagnostics = false
-
     private static let diagnostics = Logger(subsystem: "com.bytereset.metronome", category: "StoreKitDiagnostics")
 
     #if targetEnvironment(simulator)
@@ -105,55 +105,70 @@ final class MetronomeSubscription: ObservableObject {
         await task.value
     }
 
-    func logSubscriptionDiagnostics() async {
-        guard !isLoggingSubscriptionDiagnostics else { return }
-        isLoggingSubscriptionDiagnostics = true
-        defer { isLoggingSubscriptionDiagnostics = false }
+    func loadSubscriptionDiagnostics() async {
+        guard !isLoadingSubscriptionDiagnostics else { return }
+        isLoadingSubscriptionDiagnostics = true
+        defer { isLoadingSubscriptionDiagnostics = false }
 
         let logger = Self.diagnostics
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
         logger.notice("StoreKitDiagnostics begin build=\(build, privacy: .public)")
+        var report = ["构建号 \(build)"]
 
+        var groups: Set<String> = ["22612087"]
         var history = Set<String>()
         for await result in StoreKit.Transaction.all {
             guard case .verified(let transaction) = result, transaction.productType == .autoRenewable else { continue }
-            let groupID = transaction.subscriptionGroupID ?? "none"
-            history.insert("\(transaction.productID) group=\(groupID) environment=\(transaction.environment.rawValue)")
+            if let group = transaction.subscriptionGroupID { groups.insert(group) }
+            let group = transaction.subscriptionGroupID ?? "—"
+            history.insert("\(transaction.productID)\n订阅组 \(group) · \(transaction.environment.rawValue)")
         }
         let historySummary = history.isEmpty ? "none" : history.sorted().joined(separator: " | ")
         logger.notice("StoreKitDiagnostics verified subscription history=\(historySummary, privacy: .public)")
+        report.append("已验证的订阅交易记录\n" + (history.isEmpty ? "无记录" : history.sorted().joined(separator: "\n")))
+        guard !Task.isCancelled else { return }
 
-        var groups: Set<String> = ["22612087"]
+        report.append("查询的商品 ID\n" + Self.annualEntitlementIDs.sorted().joined(separator: "\n"))
         do {
             let products = try await Product.products(for: Self.annualEntitlementIDs.sorted())
-            let catalog = products.map { product in
-                "\(product.id) group=\(product.subscription?.subscriptionGroupID ?? "none")"
-            }.sorted().joined(separator: " | ")
+            let catalog = products.sorted { $0.id < $1.id }.map { product in
+                "\(product.id)\n\(product.displayPrice) · 订阅组 \(product.subscription?.subscriptionGroupID ?? "—")"
+            }
             groups.formUnion(products.compactMap { $0.subscription?.subscriptionGroupID })
-            let catalogSummary = catalog.isEmpty ? "none" : catalog
+            let catalogSummary = catalog.isEmpty ? "none" : catalog.joined(separator: " | ")
             logger.notice("StoreKitDiagnostics annual product lookup=\(catalogSummary, privacy: .public)")
+            report.append("StoreKit 返回的商品 (\(products.count))\n" + (catalog.isEmpty ? "未返回商品" : catalog.joined(separator: "\n")))
         } catch {
             let failure = error as NSError
             logger.notice("StoreKitDiagnostics product lookup error=\(failure.domain, privacy: .public)/\(failure.code, privacy: .public)")
+            report.append("商品查询失败\n\(failure.domain) / \(failure.code)")
         }
 
         for group in groups.sorted() {
+            guard !Task.isCancelled else { return }
             do {
                 let statuses = try await Product.SubscriptionInfo.status(for: group)
+                var entries = ["订阅组 \(group) · \(statuses.count) 条状态"]
                 logger.notice("StoreKitDiagnostics group=\(group, privacy: .public) status entries=\(statuses.count, privacy: .public)")
                 for status in statuses {
                     guard case .verified(let transaction) = status.transaction else {
                         logger.notice("StoreKitDiagnostics unverified group status")
+                        entries.append("有一条状态无法验证")
                         continue
                     }
                     let state = String(describing: status.state)
                     logger.notice("StoreKitDiagnostics status product=\(transaction.productID, privacy: .public) environment=\(transaction.environment.rawValue, privacy: .public) state=\(state, privacy: .public)")
+                    entries.append("\(transaction.productID)\n\(transaction.environment.rawValue) · \(state)")
                 }
+                report.append(entries.joined(separator: "\n"))
             } catch {
                 let failure = error as NSError
                 logger.notice("StoreKitDiagnostics group=\(group, privacy: .public) status error=\(failure.domain, privacy: .public)/\(failure.code, privacy: .public)")
+                report.append("订阅组 \(group) 查询失败\n\(failure.domain) / \(failure.code)")
             }
         }
+        guard !Task.isCancelled else { return }
+        subscriptionDiagnostics = report.joined(separator: "\n\n")
         logger.notice("StoreKitDiagnostics complete")
     }
 
@@ -197,6 +212,38 @@ final class MetronomeSubscription: ObservableObject {
             }
             await self?.refresh()
         }
+    }
+}
+
+@MainActor
+struct MetronomeSubscriptionDiagnosticsView: View {
+    @ObservedObject var subscription: MetronomeSubscription
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("订阅诊断")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            Text("以下是 StoreKit 查询结果。系统「可用方案」不提供逐行商品 ID。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if let report = subscription.subscriptionDiagnostics {
+                Text(verbatim: report)
+                    .font(.footnote.monospaced())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if subscription.isLoadingSubscriptionDiagnostics {
+                ProgressView("正在查询订阅…")
+            }
+            Button("刷新诊断") {
+                Task { await subscription.loadSubscriptionDiagnostics() }
+            }
+            .buttonStyle(.bordered)
+            .disabled(subscription.isLoadingSubscriptionDiagnostics)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task { await subscription.loadSubscriptionDiagnostics() }
     }
 }
 
@@ -279,6 +326,9 @@ struct MetronomeSubscriptionView: View {
                 }
 
                 accountActions
+                MetronomeSubscriptionDiagnosticsView(subscription: subscription)
+                    .padding(14)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
             .frame(maxWidth: 480, alignment: .leading)
             .padding()
@@ -290,9 +340,7 @@ struct MetronomeSubscriptionView: View {
         }
         .manageSubscriptionsSheet(isPresented: $showingManagement)
         .onChange(of: showingManagement) { _, isShowing in
-            if isShowing {
-                Task { await subscription.logSubscriptionDiagnostics() }
-            } else {
+            if !isShowing {
                 Task { await refreshStore() }
             }
         }
