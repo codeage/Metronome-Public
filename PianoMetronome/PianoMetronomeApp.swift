@@ -94,6 +94,8 @@ private struct MetronomeView: View {
     @State private var panel: Panel?
     @State private var tapPromptID: UUID?
 
+    private let portraitControlsWidth: CGFloat = 400
+
     var body: some View {
         layout
         .task(id: tapPromptID) { [tapPromptID] in
@@ -134,20 +136,46 @@ private struct MetronomeView: View {
     }
 
     private var layout: some View {
+        GeometryReader { window in
+            let compactPortrait = UIDevice.current.userInterfaceIdiom == .pad && window.size.height >= window.size.width
+
+            if compactPortrait {
+                mainControls(compactPortrait: true)
+            } else {
+                mainControls(compactPortrait: false)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        playButton
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: 900)
+                            .frame(maxWidth: .infinity)
+                            .background(MetronomePalette.background)
+                    }
+            }
+        }
+    }
+
+    private func mainControls(compactPortrait: Bool) -> some View {
         GeometryReader { viewport in
             let width = max(0, min(viewport.size.width, 900) - 32)
             let height = viewport.size.height
-            let sideBySide = (horizontalSizeClass == .regular && width >= 600) || viewport.size.width > height * 1.6
+            let regularLandscape = horizontalSizeClass == .regular && width >= 600 && viewport.size.width > height
+            let sideBySide = !compactPortrait && (regularLandscape || viewport.size.width > height * 1.6)
             let gap: CGFloat = height >= 600 ? 24 : 12
-            let dialGap: CGFloat = height >= 600 ? 24 : 16
+            let dialGap: CGFloat = compactPortrait || height >= 600 ? 24 : 16
+            let accentGap: CGFloat = compactPortrait ? 30 : gap
+            let playbackGap: CGFloat = 56
+            let inlinePlaybackHeight = compactPortrait ? playButtonHeight + playbackGap : 0
             let detailWidth = (width - gap) / 2
             let ghostHeight: CGFloat = metronome.preferences.ghost.enabled && metronome.playing ? 40 : 0
             let accents = AccentGridLayout(count: metronome.settings.accents.count,
                                            availableWidth: sideBySide ? detailWidth : width)
             let dialBudget = sideBySide
                 ? height - 64 - gap - 54 - dialGap - ghostHeight
-                : height - 64 - 44 - accents.height - 54 - gap * 3 - dialGap - ghostHeight
-            let diameter = min(sideBySide ? detailWidth : width * 0.86, max(52, dialBudget))
+                : height - 64 - 44 - accents.height - 54 - gap * 2 - dialGap - accentGap
+                    - ghostHeight - inlinePlaybackHeight
+            let dialWidth = sideBySide ? detailWidth : width * 0.86
+            let diameter = min(dialWidth, max(52, dialBudget), compactPortrait ? 560 : .infinity)
 
             VStack(spacing: gap) {
                 header
@@ -164,9 +192,16 @@ private struct MetronomeView: View {
                     .frame(maxHeight: .infinity)
                 } else {
                     rhythmControls(width: width)
-                    VStack(spacing: gap) {
-                        tempo(diameter: diameter, width: width, controlGap: dialGap)
-                        accentGrid(accents)
+                    VStack(spacing: playbackGap) {
+                        VStack(spacing: accentGap) {
+                            tempo(diameter: diameter, width: width, controlGap: dialGap,
+                                  controlWidthLimit: compactPortrait ? portraitControlsWidth : .infinity)
+                            accentGrid(accents)
+                        }
+                        if compactPortrait {
+                            playButton
+                                .frame(maxWidth: portraitControlsWidth)
+                        }
                     }
                     .frame(maxHeight: .infinity)
                 }
@@ -174,14 +209,6 @@ private struct MetronomeView: View {
             .padding(.vertical, 10)
             .frame(width: width)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            playButton
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .frame(maxWidth: 900)
-                .frame(maxWidth: .infinity)
-                .background(MetronomePalette.background)
         }
     }
 
@@ -275,8 +302,9 @@ private struct MetronomeView: View {
         }
     }
 
-    private func tempo(diameter: CGFloat, width: CGFloat, controlGap: CGFloat) -> some View {
-        let controlWidth = min(width, max(diameter, dynamicTypeSize.isAccessibilitySize ? 340 : 275))
+    private func tempo(diameter: CGFloat, width: CGFloat, controlGap: CGFloat,
+                       controlWidthLimit: CGFloat = .infinity) -> some View {
+        let controlWidth = min(width, controlWidthLimit, max(diameter, dynamicTypeSize.isAccessibilitySize ? 340 : 275))
         let range = metronome.preferences.tempoRange
         let bpm = metronome.settings.bpm
         let displayed = metronome.preferences.trainer.enabled ? metronome.effectiveTempo ?? bpm : bpm
