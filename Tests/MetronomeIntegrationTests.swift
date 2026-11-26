@@ -289,6 +289,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func simulateStoreEvent(_ operation: @escaping @Sendable () throws -> Void) async throws {
         try await Task.detached(operation: operation).value
     }
