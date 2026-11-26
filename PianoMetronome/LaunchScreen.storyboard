@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23094" targetRuntime="iOS.CocoaTouch" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="launch-controller">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23084"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="launch-scene">
+            <objects>
+                <viewController id="launch-controller" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="launch-background">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchMetronome" translatesAutoresizingMaskIntoConstraints="NO" id="launch-metronome">
+                                <rect key="frame" x="90.39" y="319.89" width="212.22" height="212.22"/>
+                            </imageView>
+                        </subviews>
+                        <color key="backgroundColor" red="0.807843137254902" green="0.8980392156862745" blue="0.9450980392156862" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="launch-metronome" firstAttribute="centerX" secondItem="launch-background" secondAttribute="centerX" id="launch-center-x"/>
+                            <constraint firstItem="launch-metronome" firstAttribute="centerY" secondItem="launch-background" secondAttribute="centerY" id="launch-center-y"/>
+                            <constraint firstItem="launch-metronome" firstAttribute="height" secondItem="launch-metronome" secondAttribute="width" id="launch-square"/>
+                            <constraint firstItem="launch-metronome" firstAttribute="width" relation="lessThanOrEqual" constant="246" id="launch-width-cap"/>
+                            <constraint firstItem="launch-metronome" firstAttribute="width" relation="lessThanOrEqual" secondItem="launch-background" secondAttribute="height" multiplier="0.54" id="launch-landscape-cap"/>
+                            <constraint firstItem="launch-metronome" firstAttribute="width" secondItem="launch-background" secondAttribute="width" multiplier="0.54" priority="750" id="launch-width"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="launch-first-responder" sceneMemberID="firstResponder"/>
+            </objects>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="LaunchMetronome" width="1024" height="1024"/>
+    </resources>
+</document>
