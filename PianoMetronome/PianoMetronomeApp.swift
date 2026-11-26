@@ -15,22 +15,7 @@ struct PianoMetronomeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if subscription.isChecking {
-                    MetronomeLaunchScreen()
-                        .ignoresSafeArea()
-                } else {
-                    MetronomeView(metronome: metronome)
-                        .disabled(!subscription.hasAccess)
-                }
-            }
-            .sheet(isPresented: Binding(
-                get: { subscription.needsPurchase },
-                set: { _ in }
-            )) {
-                MetronomeSubscriptionView(subscription: subscription)
-                    .interactiveDismissDisabled()
-            }
+            MetronomeView(metronome: metronome, needsPurchase: subscription.needsPurchase)
             .onOpenURL { url in
                 Task { await metronome.handle(url) }
             }
@@ -71,17 +56,6 @@ struct PianoMetronomeApp: App {
     }
 }
 
-private struct MetronomeLaunchScreen: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> UIViewController {
-        let storyboard = UIStoryboard(name: "LaunchScreen", bundle: nil)
-        let controller = storyboard.instantiateInitialViewController() ?? UIViewController()
-        controller.view.backgroundColor = UIColor(named: "MetronomeBackground")
-        return controller
-    }
-
-    func updateUIViewController(_ controller: UIViewController, context: Context) {}
-}
-
 enum MeterOption: String, CaseIterable, Sendable, Identifiable {
     case oneFour = "1/4", twoFour = "2/4", threeFour = "3/4", fourFour = "4/4"
     case twoTwo = "2/2", threeEight = "3/8", sixEight = "6/8", nineEight = "9/8"
@@ -106,11 +80,12 @@ enum MetronomePalette {
 @MainActor
 private struct MetronomeView: View {
     enum Panel: String, Identifiable {
-        case meter, presets, settings
+        case meter, presets, settings, subscription
         var id: Self { self }
     }
 
     @ObservedObject var metronome: Metronome
+    let needsPurchase: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -183,14 +158,20 @@ private struct MetronomeView: View {
         .focused($keyboardFocused)
         .onAppear { keyboardFocused = true }
         .onKeyPress(.space, phases: .down) { _ in
-            guard panel == nil else { return .ignored }
+            guard panel == nil, !needsPurchase else { return .ignored }
             togglePlayback()
             return .handled
         }
         .background(MetronomePalette.background.ignoresSafeArea())
         .tint(MetronomePalette.cyan)
         .preferredColorScheme(.dark)
-        .sheet(item: $panel, onDismiss: { keyboardFocused = true }) { panel in
+        .onChange(of: needsPurchase) { _, required in
+            if required { panel = nil }
+        }
+        .sheet(item: Binding<Panel?>(
+            get: { needsPurchase ? .subscription : panel },
+            set: { panel = $0 }
+        ), onDismiss: { keyboardFocused = true }) { panel in
             switch panel {
             case .meter: MeterEditor(metronome: metronome)
             case .presets:
@@ -199,10 +180,13 @@ private struct MetronomeView: View {
                         .navigationBarTitleDisplayMode(.inline)
                 }
             case .settings: MetronomeSettingsView(metronome: metronome)
+            case .subscription:
+                MetronomeSubscriptionView(subscription: metronome.subscription)
+                    .interactiveDismissDisabled()
             }
         }
         .alert("节拍器", isPresented: Binding(
-            get: { metronome.error != nil },
+            get: { !needsPurchase && metronome.error != nil },
             set: { if !$0 { metronome.error = nil } }
         )) {
             Button("好", role: .cancel) { metronome.error = nil }

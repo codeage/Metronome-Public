@@ -36,7 +36,7 @@ final class MetronomeSubscription: ObservableObject {
         }
     }
 
-    var isChecking: Bool { access == .checking && !hasAccess }
+    var canUseMetronome: Bool { access == .checking || hasAccess }
     var needsPurchase: Bool { access == .locked && !hasAccess }
     var ownsLifetime: Bool { access == .lifetime }
 
@@ -65,13 +65,13 @@ final class MetronomeSubscription: ObservableObject {
         testingSession = true
     }
 
-    func requireAccess() throws {
-        guard hasAccess else { throw MetronomeError.subscriptionRequired }
+    func requireMetronomeUsage() throws {
+        guard canUseMetronome else { throw MetronomeError.subscriptionRequired }
     }
 
     func verifyAccess() async throws {
         await refresh()
-        try requireAccess()
+        guard hasAccess else { throw MetronomeError.subscriptionRequired }
     }
 
     func accept(_ result: VerificationResult<StoreKit.Transaction>) async -> Bool {

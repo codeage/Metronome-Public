@@ -94,7 +94,7 @@ final class Metronome: ObservableObject {
     var latencyMilliseconds: Double { outputLatency * 1_000 }
 
     func update(_ value: BeatSettings) throws {
-        try subscription.requireAccess()
+        try subscription.requireMetronomeUsage()
         guard valid(value) else { throw MetronomeError.invalidSettings }
         guard value != settings else { return }
         save(value)
@@ -103,7 +103,7 @@ final class Metronome: ObservableObject {
     }
 
     func changePreferences(_ value: MetronomePreferences) throws {
-        try subscription.requireAccess()
+        try subscription.requireMetronomeUsage()
         var next = value
         let range = next.tempoRange
         next.offsetMilliseconds = min(500, max(-500, next.offsetMilliseconds))
@@ -137,7 +137,7 @@ final class Metronome: ObservableObject {
     }
 
     func tap() throws {
-        try subscription.requireAccess()
+        try subscription.requireMetronomeUsage()
         if let tempo = tapTempo.tap(at: CACurrentMediaTime(), within: preferences.tempoRange) {
             try setTempo(tempo)
         }
@@ -151,7 +151,7 @@ final class Metronome: ObservableObject {
     }
 
     func start(_ value: BeatSettings? = nil) throws {
-        try subscription.requireAccess()
+        try subscription.requireMetronomeUsage()
         let next = value ?? settings
         guard valid(next) else { throw MetronomeError.invalidSettings }
         if playing {
@@ -191,26 +191,26 @@ final class Metronome: ObservableObject {
     }
 
     func savePreset(named name: String) {
-        guard subscription.hasAccess, let name = Self.cleanedName(name) else { return }
+        guard subscription.canUseMetronome, let name = Self.cleanedName(name) else { return }
         presets.insert(.init(id: UUID(), name: name, settings: settings), at: 0)
         storePresets()
     }
 
     func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
-        guard subscription.hasAccess else { return }
+        guard subscription.canUseMetronome else { return }
         presets.move(fromOffsets: source, toOffset: destination)
         storePresets()
     }
 
     func renamePreset(_ id: UUID, to name: String) {
-        guard subscription.hasAccess, let name = Self.cleanedName(name),
+        guard subscription.canUseMetronome, let name = Self.cleanedName(name),
               let index = presets.firstIndex(where: { $0.id == id }) else { return }
         presets[index].name = name
         storePresets()
     }
 
     func deletePreset(_ id: UUID) {
-        guard subscription.hasAccess else { return }
+        guard subscription.canUseMetronome else { return }
         presets.removeAll { $0.id == id }
         storePresets()
     }
@@ -343,7 +343,7 @@ final class Metronome: ObservableObject {
 
     private func recoverAudio() {
         guard playing, let audio, !audio.isRunning else { return }
-        guard subscription.hasAccess else {
+        guard subscription.canUseMetronome else {
             stop()
             return
         }
