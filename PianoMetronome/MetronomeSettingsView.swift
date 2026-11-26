@@ -135,6 +135,14 @@ struct MetronomeSettingsView: View {
                     .buttonStyle(.plain)
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
+                Section("关于") {
+                    if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+                        LabeledContent("版本", value: version)
+                    }
+                    if let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String {
+                        LabeledContent("构建号", value: build)
+                    }
+                }
             }
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
