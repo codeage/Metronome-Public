@@ -16,8 +16,13 @@ struct PianoMetronomeApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                MetronomeView(metronome: metronome)
-                    .disabled(!subscription.hasAccess)
+                if subscription.isChecking {
+                    MetronomeLaunchScreen()
+                        .ignoresSafeArea()
+                } else {
+                    MetronomeView(metronome: metronome)
+                        .disabled(!subscription.hasAccess)
+                }
             }
             .sheet(isPresented: Binding(
                 get: { subscription.needsPurchase },
@@ -64,6 +69,17 @@ struct PianoMetronomeApp: App {
             }
         }
     }
+}
+
+private struct MetronomeLaunchScreen: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let storyboard = UIStoryboard(name: "LaunchScreen", bundle: nil)
+        let controller = storyboard.instantiateInitialViewController() ?? UIViewController()
+        controller.view.backgroundColor = UIColor(named: "MetronomeBackground")
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIViewController, context: Context) {}
 }
 
 enum MeterOption: String, CaseIterable, Sendable, Identifiable {
