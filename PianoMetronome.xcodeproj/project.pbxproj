@@ -1,4 +1,4 @@
-﻿// !$*UTF8*$!
+// !$*UTF8*$!
 {
     archiveVersion = 1;
     classes = {};
@@ -33,6 +33,8 @@
         00000000000000000000001F = {isa = PBXBuildFile; fileRef = 00000000000000000000002E; };
         000000000000000000000010 = {isa = PBXBuildFile; fileRef = 00000000000000000000003B; };
         000000000000000000000020 = {isa = PBXBuildFile; fileRef = 00000000000000000000003C; };
+        0000000000000000000000B0 = {isa = PBXBuildFile; fileRef = 0000000000000000000000B1; };
+        0000000000000000000000B2 = {isa = PBXBuildFile; fileRef = 0000000000000000000000B3; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,6 +44,13 @@
             proxyType = 1;
             remoteGlobalIDString = 000000000000000000000052;
             remoteInfo = MetronomeActivity;
+        };
+        0000000000000000000000BA = {
+            isa = PBXContainerItemProxy;
+            containerPortal = 000000000000000000000061;
+            proxyType = 1;
+            remoteGlobalIDString = 000000000000000000000051;
+            remoteInfo = PianoMetronome;
         };
 /* End PBXContainerItemProxy section */
 
@@ -86,12 +95,16 @@
         00000000000000000000003B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeCoreChecks.swift; sourceTree = "<group>"; };
         00000000000000000000003C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeTests.swift; sourceTree = "<group>"; };
         00000000000000000000003D = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MetronomeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        0000000000000000000000B1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeIntegrationTests.swift; sourceTree = "<group>"; };
+        0000000000000000000000B3 = {isa = PBXFileReference; lastKnownFileType = text; path = MetronomeTestProducts.storekit; sourceTree = "<group>"; };
+        0000000000000000000000B4 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MetronomeIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
         000000000000000000000032 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         000000000000000000000035 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         000000000000000000000038 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        0000000000000000000000B6 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -102,14 +115,14 @@
             path = PianoMetronome;
             sourceTree = "<group>";
         };
-        000000000000000000000043 /* Products */ = {isa = PBXGroup; children = (000000000000000000000025, 00000000000000000000002A, 00000000000000000000003D, ); name = Products; sourceTree = "<group>"; };
+        000000000000000000000043 /* Products */ = {isa = PBXGroup; children = (000000000000000000000025, 00000000000000000000002A, 00000000000000000000003D, 0000000000000000000000B4, ); name = Products; sourceTree = "<group>"; };
         000000000000000000000044 /* MetronomeActivity */ = {
             isa = PBXGroup;
             children = (000000000000000000000028, 000000000000000000000029, );
             path = MetronomeActivity;
             sourceTree = "<group>";
         };
-        000000000000000000000045 /* Tests */ = {isa = PBXGroup; children = (00000000000000000000003B, 00000000000000000000003C, ); path = Tests; sourceTree = "<group>"; };
+        000000000000000000000045 /* Tests */ = {isa = PBXGroup; children = (00000000000000000000003B, 00000000000000000000003C, 0000000000000000000000B1, 0000000000000000000000B3, ); path = Tests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -146,6 +159,17 @@
             productReference = 00000000000000000000003D;
             productType = "com.apple.product-type.bundle.unit-test";
         };
+        0000000000000000000000B8 /* MetronomeIntegrationTests */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = 0000000000000000000000BD;
+            buildPhases = (0000000000000000000000B5, 0000000000000000000000B6, 0000000000000000000000B7, );
+            buildRules = ();
+            dependencies = (0000000000000000000000B9, );
+            name = MetronomeIntegrationTests;
+            productName = MetronomeIntegrationTests;
+            productReference = 0000000000000000000000B4;
+            productType = "com.apple.product-type.bundle.unit-test";
+        };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -161,7 +185,7 @@
             productRefGroup = 000000000000000000000043;
             projectDirPath = "";
             projectRoot = "";
-            targets = (000000000000000000000051, 000000000000000000000052, 000000000000000000000053, );
+            targets = (000000000000000000000051, 000000000000000000000052, 000000000000000000000053, 0000000000000000000000B8, );
         };
 /* End PBXProject section */
 
@@ -178,6 +202,7 @@
             files = (0000000000000000000000A2, );
             runOnlyForDeploymentPostprocessing = 0;
         };
+        0000000000000000000000B7 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000B2, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -194,6 +219,7 @@
             runOnlyForDeploymentPostprocessing = 0;
         };
         000000000000000000000037 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000001E, 00000000000000000000001F, 000000000000000000000010, 000000000000000000000020, ); runOnlyForDeploymentPostprocessing = 0; };
+        0000000000000000000000B5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000B0, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
@@ -211,6 +237,11 @@
             target = 000000000000000000000052;
             targetProxy = 000000000000000000000092;
         };
+        0000000000000000000000B9 = {
+            isa = PBXTargetDependency;
+            target = 000000000000000000000051;
+            targetProxy = 0000000000000000000000BA;
+        };
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -223,6 +254,7 @@
                 IPHONEOS_DEPLOYMENT_TARGET = 17.0;
                 SDKROOT = iphoneos;
                 SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+                ENABLE_TESTABILITY = YES;
                 SWIFT_VERSION = 6.0;
                 SWIFT_STRICT_CONCURRENCY = complete;
             };
@@ -338,6 +370,32 @@
                 TARGETED_DEVICE_FAMILY = "1,2";
             };
         };
+        0000000000000000000000BB = {
+            isa = XCBuildConfiguration;
+            name = Debug;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                GENERATE_INFOPLIST_FILE = YES;
+                PRODUCT_BUNDLE_IDENTIFIER = com.bytereset.metronome.integrationtests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PianoMetronome.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PianoMetronome";
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+        };
+        0000000000000000000000BC = {
+            isa = XCBuildConfiguration;
+            name = Release;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                GENERATE_INFOPLIST_FILE = YES;
+                PRODUCT_BUNDLE_IDENTIFIER = com.bytereset.metronome.integrationtests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SKIP_INSTALL = YES;
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PianoMetronome.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PianoMetronome";
+                TARGETED_DEVICE_FAMILY = "1,2";
+            };
+        };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -345,6 +403,7 @@
         000000000000000000000082 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000073, 000000000000000000000074, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         000000000000000000000083 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000075, 000000000000000000000076, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         000000000000000000000084 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000079, 00000000000000000000007A, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        0000000000000000000000BD = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000BB, 0000000000000000000000BC, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
     };
     rootObject = 000000000000000000000061;

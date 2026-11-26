@@ -1,0 +1,67 @@
+{
+  "identifier": "A7A0FCF2",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "1.99",
+      "familyShareable": false,
+      "internalID": "681BCAEE",
+      "localizations": [
+        {
+          "description": "Permanent access",
+          "displayName": "Lifetime Access",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.bytereset.metronome.lifetime",
+      "referenceName": "Lifetime Access",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [
+    {
+      "id": "709ADFAB",
+      "localizations": [],
+      "name": "Metronome Full Access",
+      "subscriptions": [
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "0.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "4663D7B9",
+          "introductoryOffer": {
+            "internalID": "604C59F5",
+            "numberOfPeriods": 1,
+            "paymentMode": "free",
+            "subscriptionPeriod": "P1W"
+          },
+          "localizations": [
+            {
+              "description": "One year of access",
+              "displayName": "Annual Access",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "com.bytereset.metronome.annual",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Annual Access",
+          "subscriptionGroupID": "709ADFAB",
+          "type": "RecurringSubscription",
+          "winbackOffers": []
+        }
+      ]
+    }
+  ],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

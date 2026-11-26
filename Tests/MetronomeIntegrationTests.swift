@@ -1,0 +1,211 @@
+import AppIntents
+import StoreKit
+import StoreKitTest
+import XCTest
+@testable import PianoMetronome
+
+final class MetronomeIntegrationTests: XCTestCase {
+    @MainActor
+    func testAnnualProductOffersOneWeekFreeToNewSubscriber() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        let product = try await annualProduct()
+        let subscription = try XCTUnwrap(product.subscription)
+        let offer = try XCTUnwrap(subscription.introductoryOffer)
+        let eligible = await subscription.isEligibleForIntroOffer
+
+        XCTAssertEqual(product.type, .autoRenewable)
+        XCTAssertEqual(product.price, Decimal(string: "0.99"))
+        XCTAssertEqual(subscription.subscriptionPeriod.unit, .year)
+        XCTAssertEqual(subscription.subscriptionPeriod.value, 1)
+        XCTAssertEqual(offer.paymentMode, .freeTrial)
+        XCTAssertEqual(offer.period.unit, .week)
+        XCTAssertEqual(offer.period.value, 1)
+        XCTAssertEqual(offer.periodCount, 1)
+        XCTAssertEqual(offer.price, 0)
+        XCTAssertTrue(eligible)
+    }
+
+    @MainActor
+    func testTrialUnlocksAndFreeTrialIsNotGrantedTwice() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        let access = MetronomeSubscription()
+        await access.refresh()
+        XCTAssertThrowsError(try access.requireAccess())
+
+        let product = try await annualProduct()
+        let paidResult = try await product.purchase()
+        guard case .success(let verification) = paidResult,
+              case .verified(let transaction) = verification else {
+            return XCTFail("StoreKit did not return a verified annual purchase")
+        }
+        let accepted = await access.accept(verification)
+        XCTAssertTrue(accepted)
+        XCTAssertTrue(access.hasAccess)
+        XCTAssertFalse(access.ownsLifetime)
+        if #available(iOS 17.2, *) {
+            XCTAssertEqual(transaction.offer?.type, .introductory)
+            XCTAssertEqual(transaction.offer?.paymentMode, .freeTrial)
+        }
+        let subscription = try XCTUnwrap(product.subscription)
+        let eligibleAfterPurchase = await subscription.isEligibleForIntroOffer
+        XCTAssertFalse(eligibleAfterPurchase)
+    }
+
+    @MainActor
+    func testAnnualRenewalCancellationAndExpiration() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        let id = MetronomeSubscription.annualProductID
+        let access = MetronomeSubscription()
+        let original = try session.buyProduct(productIdentifier: id)
+        try await access.verifyAccess()
+        try session.forceRenewalOfSubscription(productIdentifier: id)
+        try await access.verifyAccess()
+        let transactions = session.allTransactions().filter { $0.productIdentifier == id }
+        XCTAssertGreaterThanOrEqual(transactions.count, 2)
+        let renewal = try XCTUnwrap(transactions.first { $0.identifier != original.identifier })
+
+        try session.disableAutoRenewForTransaction(identifier: renewal.identifier)
+        try await access.verifyAccess()
+        var didLoseAccess = false
+        access.onAccessLost = { didLoseAccess = true }
+        try session.expireSubscription(productIdentifier: id)
+        await access.refresh()
+        XCTAssertTrue(didLoseAccess)
+        XCTAssertThrowsError(try access.requireAccess())
+    }
+
+    @MainActor
+    func testLifetimePurchaseRestoreAndRefund() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        let id = MetronomeSubscription.lifetimeProductID
+        let products = try await Product.products(for: [id])
+        let product = try XCTUnwrap(products.first)
+        XCTAssertEqual(product.type, .nonConsumable)
+        XCTAssertEqual(product.price, Decimal(string: "1.99"))
+        let purchase = try session.buyProduct(productIdentifier: id)
+
+        try await AppStore.sync()
+        let access = MetronomeSubscription()
+        try await access.verifyAccess()
+        XCTAssertTrue(access.ownsLifetime)
+
+        try session.refundTransaction(identifier: purchase.identifier)
+        await access.refresh()
+        XCTAssertFalse(access.ownsLifetime)
+        XCTAssertThrowsError(try access.requireAccess())
+    }
+
+    @MainActor
+    func testLifetimeAccessSurvivesAnnualExpiration() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        let annualID = MetronomeSubscription.annualProductID
+        _ = try session.buyProduct(productIdentifier: annualID)
+        _ = try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
+        let access = MetronomeSubscription()
+        try await access.verifyAccess()
+        XCTAssertTrue(access.ownsLifetime)
+
+        try session.expireSubscription(productIdentifier: annualID)
+        try await access.verifyAccess()
+        XCTAssertTrue(access.ownsLifetime)
+    }
+
+    @MainActor
+    func testEntitlementGuardsURLAndShortcutsAndExpiryStopsPlayback() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        let metronome = Metronome.shared
+        defer { metronome.stop() }
+        let url = try XCTUnwrap(URL(string: "bytereset-metronome://start?bpm=137&beats=5&unit=4"))
+        await metronome.handle(url)
+        XCTAssertFalse(metronome.playing)
+        XCTAssertNotNil(metronome.error)
+        do {
+            _ = try await StartMetronomeIntent().perform()
+            XCTFail("App Intent started playback without an entitlement")
+        } catch MetronomeError.subscriptionRequired {}
+
+        let annualID = MetronomeSubscription.annualProductID
+        _ = try session.buyProduct(productIdentifier: annualID)
+        metronome.error = nil
+        await metronome.handle(url)
+        XCTAssertNil(metronome.error)
+        XCTAssertTrue(metronome.playing)
+        XCTAssertEqual(metronome.settings.bpm, 137)
+        XCTAssertEqual(metronome.settings.beats, 5)
+        let stop = try XCTUnwrap(URL(string: "bytereset-metronome://stop"))
+        await metronome.handle(stop)
+        XCTAssertFalse(metronome.playing)
+        _ = try await StartMetronomeIntent().perform()
+        XCTAssertTrue(metronome.playing)
+
+        try session.expireSubscription(productIdentifier: annualID)
+        await metronome.subscription.refresh()
+        XCTAssertFalse(metronome.playing)
+        XCTAssertFalse(metronome.subscription.hasAccess)
+    }
+
+    @MainActor
+    func testPresetsInsertReorderRenameLoadAndDelete() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        _ = try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
+        let metronome = Metronome.shared
+        try await metronome.subscription.verifyAccess()
+        let original = metronome.settings
+        let names = (UUID().uuidString, UUID().uuidString)
+        defer {
+            for preset in metronome.presets where [names.0, names.1, names.1 + "-renamed"].contains(preset.name) {
+                metronome.deletePreset(preset.id)
+            }
+            try? metronome.update(original)
+        }
+
+        try metronome.setTempo(121)
+        metronome.savePreset(named: names.0)
+        try metronome.setTempo(143)
+        metronome.savePreset(named: names.1)
+        XCTAssertEqual(metronome.presets.prefix(2).map(\.name), [names.1, names.0])
+        let newest = try XCTUnwrap(metronome.presets.first)
+        metronome.movePresets(fromOffsets: IndexSet(integer: 0), toOffset: 2)
+        XCTAssertEqual(metronome.presets.prefix(2).map(\.name), [names.0, names.1])
+        metronome.renamePreset(newest.id, to: names.1 + "-renamed")
+        XCTAssertEqual(metronome.presets[1].name, names.1 + "-renamed")
+        try metronome.setTempo(100)
+        try metronome.loadPreset(metronome.presets[1])
+        XCTAssertEqual(metronome.settings.bpm, 143)
+        metronome.deletePreset(newest.id)
+        XCTAssertFalse(metronome.presets.contains { $0.id == newest.id })
+    }
+
+    @MainActor
+    private func freshStore() throws -> SKTestSession {
+        let configuration = try XCTUnwrap(Bundle(for: Self.self).url(
+            forResource: "MetronomeTestProducts", withExtension: "storekit"
+        ))
+        let session = try SKTestSession(contentsOf: configuration)
+        session.resetToDefaultState()
+        session.disableDialogs = true
+        session.clearTransactions()
+        return session
+    }
+
+    @MainActor
+    private func annualProduct() async throws -> Product {
+        let products = try await Product.products(for: [MetronomeSubscription.annualProductID])
+        return try XCTUnwrap(products.first)
+    }
+}
+
