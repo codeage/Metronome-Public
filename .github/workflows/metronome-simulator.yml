@@ -42,7 +42,22 @@ jobs:
           )"
           echo "DEVICE=$device" >> "$GITHUB_ENV"
           xcrun simctl boot "$device"
+      - name: Build the app and test bundles
+        timeout-minutes: 9
+        run: |
+          set -euo pipefail
+          xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
+            -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE,arch=arm64" \
+            -derivedDataPath "$RUNNER_TEMP/MetronomeSim" ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build-for-testing 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log"
+      - name: Wait for iOS and install the app
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$RUNNER_TEMP/MetronomeSim/Build/Products/Debug-iphonesimulator/PianoMetronome.app"
       - name: Run XCTest serially
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           set --
@@ -55,7 +70,8 @@ jobs:
             -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
             -maximum-test-execution-time-allowance 180 \
             -resultBundlePath "$RUNNER_TEMP/MetronomeTests.xcresult" \
-            "$@" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+            "$@" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- \
+            test-without-building 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
       - name: Exercise playback URL on the simulator
         if: success() && matrix.profile == 'pro'
         run: |
@@ -90,6 +106,7 @@ jobs:
           retention-days: 7
           path: |
             ${{ runner.temp }}/MetronomeTests.xcresult
+            ${{ runner.temp }}/xcodebuild-build.log
             ${{ runner.temp }}/xcodebuild.log
             ${{ runner.temp }}/test-summary.json
             ${{ runner.temp }}/metronome-*.png
