@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/codex/metronome-review-build16'
     runs-on: macos-26
     timeout-minutes: 15
     steps:
