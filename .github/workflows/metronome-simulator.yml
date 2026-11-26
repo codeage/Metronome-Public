@@ -45,9 +45,9 @@ jobs:
       - name: Run XCTest serially
         run: |
           set -euo pipefail
-          scope=()
+          set --
           if [[ "$SIMULATOR_PROFILE" == "compact" ]]; then
-            scope=(-only-testing:MetronomeUITests)
+            set -- -only-testing:MetronomeUITests
           fi
           xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
             -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE,arch=arm64" \
@@ -55,7 +55,7 @@ jobs:
             -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
             -maximum-test-execution-time-allowance 180 \
             -resultBundlePath "$RUNNER_TEMP/MetronomeTests.xcresult" \
-            "${scope[@]}" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+            "$@" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
       - name: Exercise playback URL on the simulator
         if: success() && matrix.profile == 'pro'
         run: |
