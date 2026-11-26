@@ -20,8 +20,10 @@ final class MetronomeIntegrationTests: XCTestCase {
         XCTAssertEqual(subscription.subscriptionPeriod.unit, .year)
         XCTAssertEqual(subscription.subscriptionPeriod.value, 1)
         XCTAssertEqual(offer.paymentMode, .freeTrial)
-        XCTAssertEqual(offer.period.unit, .week)
-        XCTAssertEqual(offer.period.value, 1)
+        XCTAssertTrue(
+            (offer.period.unit == .week && offer.period.value == 1)
+                || (offer.period.unit == .day && offer.period.value == 7)
+        )
         XCTAssertEqual(offer.periodCount, 1)
         XCTAssertEqual(offer.price, 0)
         XCTAssertTrue(eligible)

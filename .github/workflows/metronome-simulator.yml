@@ -31,6 +31,9 @@ jobs:
               runtimes = json.load(listing)["devices"]
           releases = [key for key in runtimes if ".iOS-" in key]
           releases.sort(key=lambda key: tuple(map(int, key.split(".iOS-", 1)[1].split("-"))))
+          if sys.argv[2] == "pro":
+              # This runtime supports loading the local SKTestSession configuration on the hosted runner.
+              releases = [release for release in releases if release.endswith(".iOS-26-2")]
           devices = [device for release in releases for device in runtimes[release]]
           names = ["iPhone 17 Pro"] if sys.argv[2] == "pro" else ["iPhone 17e", "iPhone 16e", "iPhone 17"]
           for name in names:
