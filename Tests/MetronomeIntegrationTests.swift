@@ -7,7 +7,7 @@ import XCTest
 final class MetronomeIntegrationTests: XCTestCase {
     @MainActor
     func testAnnualProductOffersOneWeekFreeToNewSubscriber() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
         let product = try await annualProduct()
@@ -29,7 +29,7 @@ final class MetronomeIntegrationTests: XCTestCase {
 
     @MainActor
     func testTrialUnlocksAndFreeTrialIsNotGrantedTwice() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
         let access = MetronomeSubscription()
@@ -42,6 +42,7 @@ final class MetronomeIntegrationTests: XCTestCase {
               case .verified(let transaction) = verification else {
             return XCTFail("StoreKit did not return a verified annual purchase")
         }
+        try await waitForStoreEntitlements([product.id])
         let accepted = await access.accept(verification)
         XCTAssertTrue(accepted)
         XCTAssertTrue(access.hasAccess)
@@ -57,7 +58,7 @@ final class MetronomeIntegrationTests: XCTestCase {
 
     @MainActor
     func testPendingPurchaseOnlyUnlocksAfterApproval() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer {
             session.resetToDefaultState()
             session.clearTransactions()
@@ -75,18 +76,20 @@ final class MetronomeIntegrationTests: XCTestCase {
         let pending = try XCTUnwrap(session.allTransactions().first { $0.productIdentifier == product.id })
         let pendingID = pending.identifier
         try await simulateStoreEvent { try session.approveAskToBuyTransaction(identifier: pendingID) }
+        try await waitForStoreEntitlements([product.id])
         try await access.verifyAccess()
         XCTAssertFalse(access.ownsLifetime)
     }
 
     @MainActor
     func testAnnualRenewalCancellationAndExpiration() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
         let id = MetronomeSubscription.annualProductID
         let access = MetronomeSubscription()
         try await session.buyProduct(identifier: id)
+        try await waitForStoreEntitlements([id])
         try await access.verifyAccess()
         let original = try XCTUnwrap(session.allTransactions().first { $0.productIdentifier == id })
         try await simulateStoreEvent { try session.forceRenewalOfSubscription(productIdentifier: id) }
@@ -101,6 +104,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         var didLoseAccess = false
         access.onAccessLost = { didLoseAccess = true }
         try await simulateStoreEvent { try session.expireSubscription(productIdentifier: id) }
+        try await waitForStoreEntitlements([])
         await access.refresh()
         XCTAssertTrue(didLoseAccess)
         XCTAssertThrowsError(try access.requireAccess())
@@ -108,7 +112,7 @@ final class MetronomeIntegrationTests: XCTestCase {
 
     @MainActor
     func testLifetimePurchaseRestoreAndRefund() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
         let id = MetronomeSubscription.lifetimeProductID
@@ -121,6 +125,7 @@ final class MetronomeIntegrationTests: XCTestCase {
               case .verified(let transaction) = verification else {
             return XCTFail("StoreKit did not return a verified lifetime purchase")
         }
+        try await waitForStoreEntitlements([product.id])
         let accepted = await access.accept(verification)
         XCTAssertTrue(accepted)
         XCTAssertTrue(access.ownsLifetime)
@@ -133,6 +138,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         let purchase = try XCTUnwrap(session.allTransactions().first { $0.productIdentifier == id && UInt64($0.identifier) == transaction.id })
         let purchaseID = purchase.identifier
         try await simulateStoreEvent { try session.refundTransaction(identifier: purchaseID) }
+        try await waitForStoreEntitlements([])
         await access.refresh()
         XCTAssertFalse(access.ownsLifetime)
         XCTAssertThrowsError(try access.requireAccess())
@@ -140,24 +146,27 @@ final class MetronomeIntegrationTests: XCTestCase {
 
     @MainActor
     func testLifetimeAccessSurvivesAnnualExpiration() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
         let annualID = MetronomeSubscription.annualProductID
+        let lifetimeID = MetronomeSubscription.lifetimeProductID
         try await session.buyProduct(identifier: annualID)
-        try await session.buyProduct(identifier: MetronomeSubscription.lifetimeProductID)
+        try await session.buyProduct(identifier: lifetimeID)
+        try await waitForStoreEntitlements([annualID, lifetimeID])
         let access = MetronomeSubscription()
         try await access.verifyAccess()
         XCTAssertTrue(access.ownsLifetime)
 
         try await simulateStoreEvent { try session.expireSubscription(productIdentifier: annualID) }
+        try await waitForStoreEntitlements([lifetimeID])
         try await access.verifyAccess()
         XCTAssertTrue(access.ownsLifetime)
     }
 
     @MainActor
     func testEntitlementGuardsURLAndShortcutsAndExpiryStopsPlayback() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
         let metronome = Metronome.shared
@@ -173,6 +182,7 @@ final class MetronomeIntegrationTests: XCTestCase {
 
         let annualID = MetronomeSubscription.annualProductID
         try await session.buyProduct(identifier: annualID)
+        try await waitForStoreEntitlements([annualID])
         metronome.error = nil
         await metronome.handle(url)
         XCTAssertNil(metronome.error)
@@ -186,6 +196,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         XCTAssertTrue(metronome.playing)
 
         try await simulateStoreEvent { try session.expireSubscription(productIdentifier: annualID) }
+        try await waitForStoreEntitlements([])
         await metronome.subscription.refresh()
         XCTAssertFalse(metronome.playing)
         XCTAssertFalse(metronome.subscription.hasAccess)
@@ -193,10 +204,12 @@ final class MetronomeIntegrationTests: XCTestCase {
 
     @MainActor
     func testPresetsInsertReorderRenameLoadAndDelete() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
-        try await session.buyProduct(identifier: MetronomeSubscription.lifetimeProductID)
+        let lifetimeID = MetronomeSubscription.lifetimeProductID
+        try await session.buyProduct(identifier: lifetimeID)
+        try await waitForStoreEntitlements([lifetimeID])
         let metronome = Metronome.shared
         try await metronome.subscription.verifyAccess()
         let original = metronome.settings
@@ -227,10 +240,12 @@ final class MetronomeIntegrationTests: XCTestCase {
 
     @MainActor
     func testAdvancedSettingsAndSiriActions() async throws {
-        let session = try freshStore()
+        let session = try await freshStore()
         defer { session.clearTransactions() }
 
-        try await session.buyProduct(identifier: MetronomeSubscription.lifetimeProductID)
+        let lifetimeID = MetronomeSubscription.lifetimeProductID
+        try await session.buyProduct(identifier: lifetimeID)
+        try await waitForStoreEntitlements([lifetimeID])
         let metronome = Metronome.shared
         try await metronome.subscription.verifyAccess()
         let original = metronome.settings
@@ -289,13 +304,42 @@ final class MetronomeIntegrationTests: XCTestCase {
         }
     }
 
+    private struct StoreEntitlementsDidNotSettle: Error, CustomStringConvertible {
+        let expected: Set<String>
+        let actual: Set<String>
+
+        var description: String {
+            "StoreKit did not publish the expected entitlements: expected \(expected.sorted()), saw \(actual.sorted())"
+        }
+    }
+
+    @MainActor
+    private func waitForStoreEntitlements(_ expected: Set<String>) async throws {
+        // StoreKitTest completes the operation before the simulated store propagates it.
+        let deadline = ContinuousClock.now + .seconds(12)
+        while true {
+            var active: Set<String> = []
+            for await result in Transaction.currentEntitlements {
+                guard case .verified(let transaction) = result,
+                      transaction.revocationDate == nil,
+                      transaction.expirationDate.map({ $0 > .now }) ?? true else { continue }
+                active.insert(transaction.productID)
+            }
+            if active == expected { return }
+            guard ContinuousClock.now < deadline else {
+                throw StoreEntitlementsDidNotSettle(expected: expected, actual: active)
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
     @MainActor
     private func simulateStoreEvent(_ operation: @escaping @Sendable () throws -> Void) async throws {
         try await Task.detached(operation: operation).value
     }
 
     @MainActor
-    private func freshStore() throws -> SKTestSession {
+    private func freshStore() async throws -> SKTestSession {
         let configuration = try XCTUnwrap(Bundle(for: Self.self).url(
             forResource: "MetronomeTestProducts", withExtension: "storekit"
         ))
@@ -303,6 +347,7 @@ final class MetronomeIntegrationTests: XCTestCase {
         session.resetToDefaultState()
         session.disableDialogs = true
         session.clearTransactions()
+        try await waitForStoreEntitlements([])
         return session
     }
 
