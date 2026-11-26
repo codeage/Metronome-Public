@@ -197,7 +197,14 @@
 /* Begin PBXProject section */
         000000000000000000000061 /* Project object */ = {
             isa = PBXProject;
-            attributes = { LastSwiftUpdateCheck = 1320; LastUpgradeCheck = 1320; };
+            attributes = {
+                LastSwiftUpdateCheck = 1320;
+                LastUpgradeCheck = 1320;
+                TargetAttributes = {
+                    0000000000000000000000B8 = { TestTargetID = 000000000000000000000051; };
+                    0000000000000000000000C5 = { TestTargetID = 000000000000000000000051; };
+                };
+            };
             buildConfigurationList = 000000000000000000000081;
             compatibilityVersion = "Xcode 13.0";
             developmentRegion = "zh-Hans";

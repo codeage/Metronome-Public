@@ -53,6 +53,8 @@ jobs:
           xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
             -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" \
             -derivedDataPath "$RUNNER_TEMP/MetronomeSim" -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 180 \
             -resultBundlePath "$RUNNER_TEMP/MetronomeTests.xcresult" \
             "${scope[@]}" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
       - name: Exercise playback URL on the simulator
@@ -68,6 +70,20 @@ jobs:
           sleep 2
           xcrun simctl io "$DEVICE" screenshot "$RUNNER_TEMP/metronome-playing.png"
           xcrun simctl openurl "$DEVICE" 'bytereset-metronome://stop'
+      - name: Record XCTest result totals
+        if: always()
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/MetronomeTests.xcresult"
+          if [[ -d "$result" ]]; then
+            xcrun xcresulttool get test-results summary --path "$result" > "$RUNNER_TEMP/test-summary.json"
+            {
+              echo '### XCTest results'
+              echo '```json'
+              cat "$RUNNER_TEMP/test-summary.json"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -76,4 +92,5 @@ jobs:
           path: |
             ${{ runner.temp }}/MetronomeTests.xcresult
             ${{ runner.temp }}/xcodebuild.log
+            ${{ runner.temp }}/test-summary.json
             ${{ runner.temp }}/metronome-*.png

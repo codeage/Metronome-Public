@@ -56,6 +56,29 @@ final class MetronomeIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testPendingPurchaseOnlyUnlocksAfterApproval() async throws {
+        let session = try freshStore()
+        defer {
+            session.resetToDefaultState()
+            session.clearTransactions()
+        }
+
+        session.askToBuyEnabled = true
+        let product = try await annualProduct()
+        let access = MetronomeSubscription()
+        guard case .pending = try await product.purchase() else {
+            return XCTFail("Expected an Ask to Buy purchase to be pending")
+        }
+        await access.refresh()
+        XCTAssertThrowsError(try access.requireAccess())
+
+        let pending = try XCTUnwrap(session.allTransactions().first { $0.productIdentifier == product.id })
+        try session.approveAskToBuyTransaction(identifier: pending.identifier)
+        try await access.verifyAccess()
+        XCTAssertFalse(access.ownsLifetime)
+    }
+
+    @MainActor
     func testAnnualRenewalCancellationAndExpiration() async throws {
         let session = try freshStore()
         defer { session.clearTransactions() }
@@ -90,13 +113,21 @@ final class MetronomeIntegrationTests: XCTestCase {
         let product = try XCTUnwrap(products.first)
         XCTAssertEqual(product.type, .nonConsumable)
         XCTAssertEqual(product.price, Decimal(string: "1.99"))
-        let purchase = try session.buyProduct(productIdentifier: id)
-
-        try await AppStore.sync()
         let access = MetronomeSubscription()
-        try await access.verifyAccess()
+        guard case .success(let verification) = try await product.purchase(),
+              case .verified(let transaction) = verification else {
+            return XCTFail("StoreKit did not return a verified lifetime purchase")
+        }
+        let accepted = await access.accept(verification)
+        XCTAssertTrue(accepted)
         XCTAssertTrue(access.ownsLifetime)
 
+        try await AppStore.sync()
+        let restored = MetronomeSubscription()
+        try await restored.verifyAccess()
+        XCTAssertTrue(restored.ownsLifetime)
+
+        let purchase = try XCTUnwrap(session.allTransactions().first { $0.productIdentifier == id && UInt64($0.identifier) == transaction.id })
         try session.refundTransaction(identifier: purchase.identifier)
         await access.refresh()
         XCTAssertFalse(access.ownsLifetime)
@@ -188,6 +219,70 @@ final class MetronomeIntegrationTests: XCTestCase {
         XCTAssertEqual(metronome.settings.bpm, 143)
         metronome.deletePreset(newest.id)
         XCTAssertFalse(metronome.presets.contains { $0.id == newest.id })
+    }
+
+    @MainActor
+    func testAdvancedSettingsAndSiriActions() async throws {
+        let session = try freshStore()
+        defer { session.clearTransactions() }
+
+        _ = try session.buyProduct(productIdentifier: MetronomeSubscription.lifetimeProductID)
+        let metronome = Metronome.shared
+        try await metronome.subscription.verifyAccess()
+        let original = metronome.settings
+        let originalPreferences = metronome.preferences
+        defer {
+            try? metronome.changePreferences(originalPreferences)
+            try? metronome.update(original)
+        }
+
+        try metronome.changePreferences(MetronomePreferences())
+        XCTAssertThrowsError(try metronome.setTempo(20))
+        XCTAssertThrowsError(try metronome.update(BeatSettings(beats: 32, unit: 64)))
+
+        var advanced = MetronomePreferences()
+        advanced.professionalTempo = true
+        advanced.extendedMeter = true
+        advanced.showTempoMark = true
+        advanced.keepAwake = false
+        advanced.mixWithOthers = false
+        advanced.flash = true
+        advanced.haptics = true
+        advanced.volume = 0.75
+        advanced.balance = -0.4
+        advanced.offsetMilliseconds = 35
+        advanced.trainer.enabled = true
+        advanced.ghost.enabled = true
+        try metronome.changePreferences(advanced)
+        XCTAssertEqual(metronome.preferences, advanced)
+
+        try metronome.update(BeatSettings(bpm: 300, beats: 32, unit: 64))
+        XCTAssertEqual(metronome.settings.accents.count, 32)
+        XCTAssertEqual(metronome.settings.tempoMark, "Presto")
+
+        let query = SpokenMetronomeTempoQuery()
+        let availableTempos = try await query.suggestedEntities()
+        XCTAssertEqual(availableTempos.map(\.id), Array(20...300))
+        let tempos = try await query.entities(for: [19, 20, 116, 300, 301])
+        XCTAssertEqual(tempos.map(\.id), [20, 116, 300])
+
+        var tempoAction = SetSpokenMetronomeTempoIntent()
+        tempoAction.tempo = SpokenMetronomeTempo(id: 116)
+        _ = try await tempoAction.perform()
+        XCTAssertEqual(metronome.settings.bpm, 116)
+        var meterAction = SetMetronomeMeterIntent()
+        for option in MeterOption.allCases {
+            meterAction.meter = option
+            _ = try await meterAction.perform()
+            XCTAssertEqual(metronome.settings.meter, option.rawValue)
+        }
+        var settings = metronome.settings
+        settings.accents[0] = .strong
+        try metronome.update(settings)
+        for accent in [BeatAccent.medium, .weak, .silent, .strong] {
+            try metronome.cycleAccent(0)
+            XCTAssertEqual(metronome.settings.accents[0], accent)
+        }
     }
 
     @MainActor
