@@ -29,7 +29,9 @@ jobs:
           import sys
           with open(sys.argv[1]) as listing:
               runtimes = json.load(listing)["devices"]
-          devices = [d for runtime, entries in runtimes.items() if ".iOS-" in runtime for d in entries]
+          releases = [key for key in runtimes if ".iOS-" in key]
+          releases.sort(key=lambda key: tuple(map(int, key.split(".iOS-", 1)[1].split("-"))))
+          devices = [device for release in releases for device in runtimes[release]]
           names = ["iPhone 17 Pro"] if sys.argv[2] == "pro" else ["iPhone 17e", "iPhone 16e", "iPhone 17"]
           for name in names:
               if (matches := [d for d in devices if d["name"] == name]):

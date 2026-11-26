@@ -347,6 +347,11 @@ final class MetronomeIntegrationTests: XCTestCase {
         session.resetToDefaultState()
         session.disableDialogs = true
         session.clearTransactions()
+        let expectedProducts: Set<String> = [
+            MetronomeSubscription.annualProductID, MetronomeSubscription.lifetimeProductID
+        ]
+        let products = try await Product.products(for: expectedProducts)
+        XCTAssertEqual(Set(products.map(\.id)), expectedProducts)
         try await waitForStoreEntitlements([])
         return session
     }
@@ -357,4 +362,3 @@ final class MetronomeIntegrationTests: XCTestCase {
         return try XCTUnwrap(products.first)
     }
 }
-
