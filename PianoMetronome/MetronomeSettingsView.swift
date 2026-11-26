@@ -152,7 +152,11 @@ struct MetronomeSettingsView: View {
         }
         .manageSubscriptionsSheet(isPresented: $showingSubscriptionManagement)
         .onChange(of: showingSubscriptionManagement) { _, isShowing in
-            if !isShowing { Task { await metronome.subscription.refresh() } }
+            if isShowing {
+                Task { await subscription.logSubscriptionDiagnostics() }
+            } else {
+                Task { await subscription.refresh() }
+            }
         }
     }
 

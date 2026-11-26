@@ -1,4 +1,5 @@
 ﻿import Foundation
+import OSLog
 import StoreKit
 import SwiftUI
 
@@ -22,6 +23,9 @@ final class MetronomeSubscription: ObservableObject {
 
     private var refreshTask: Task<Void, Never>?
     private var expirationTask: Task<Void, Never>?
+    private var isLoggingSubscriptionDiagnostics = false
+
+    private static let diagnostics = Logger(subsystem: "com.bytereset.metronome", category: "StoreKitDiagnostics")
 
     #if targetEnvironment(simulator)
     private let isLayoutPreview = ProcessInfo.processInfo.arguments.contains("--metronome-layout-preview")
@@ -99,6 +103,58 @@ final class MetronomeSubscription: ObservableObject {
         }
         refreshTask = task
         await task.value
+    }
+
+    func logSubscriptionDiagnostics() async {
+        guard !isLoggingSubscriptionDiagnostics else { return }
+        isLoggingSubscriptionDiagnostics = true
+        defer { isLoggingSubscriptionDiagnostics = false }
+
+        let logger = Self.diagnostics
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+        logger.notice("StoreKitDiagnostics begin build=\(build, privacy: .public)")
+
+        var history = Set<String>()
+        for await result in StoreKit.Transaction.all {
+            guard case .verified(let transaction) = result, transaction.productType == .autoRenewable else { continue }
+            let groupID = transaction.subscriptionGroupID ?? "none"
+            history.insert("\(transaction.productID) group=\(groupID) environment=\(transaction.environment.rawValue)")
+        }
+        let historySummary = history.isEmpty ? "none" : history.sorted().joined(separator: " | ")
+        logger.notice("StoreKitDiagnostics verified subscription history=\(historySummary, privacy: .public)")
+
+        var groups: Set<String> = ["22612087"]
+        do {
+            let products = try await Product.products(for: Self.annualEntitlementIDs.sorted())
+            let catalog = products.map { product in
+                "\(product.id) group=\(product.subscription?.subscriptionGroupID ?? "none")"
+            }.sorted().joined(separator: " | ")
+            groups.formUnion(products.compactMap { $0.subscription?.subscriptionGroupID })
+            let catalogSummary = catalog.isEmpty ? "none" : catalog
+            logger.notice("StoreKitDiagnostics annual product lookup=\(catalogSummary, privacy: .public)")
+        } catch {
+            let failure = error as NSError
+            logger.notice("StoreKitDiagnostics product lookup error=\(failure.domain, privacy: .public)/\(failure.code, privacy: .public)")
+        }
+
+        for group in groups.sorted() {
+            do {
+                let statuses = try await Product.SubscriptionInfo.status(for: group)
+                logger.notice("StoreKitDiagnostics group=\(group, privacy: .public) status entries=\(statuses.count, privacy: .public)")
+                for status in statuses {
+                    guard case .verified(let transaction) = status.transaction else {
+                        logger.notice("StoreKitDiagnostics unverified group status")
+                        continue
+                    }
+                    let state = String(describing: status.state)
+                    logger.notice("StoreKitDiagnostics status product=\(transaction.productID, privacy: .public) environment=\(transaction.environment.rawValue, privacy: .public) state=\(state, privacy: .public)")
+                }
+            } catch {
+                let failure = error as NSError
+                logger.notice("StoreKitDiagnostics group=\(group, privacy: .public) status error=\(failure.domain, privacy: .public)/\(failure.code, privacy: .public)")
+            }
+        }
+        logger.notice("StoreKitDiagnostics complete")
     }
 
     private func readEntitlement() async {
@@ -234,7 +290,11 @@ struct MetronomeSubscriptionView: View {
         }
         .manageSubscriptionsSheet(isPresented: $showingManagement)
         .onChange(of: showingManagement) { _, isShowing in
-            if !isShowing { Task { await refreshStore() } }
+            if isShowing {
+                Task { await subscription.logSubscriptionDiagnostics() }
+            } else {
+                Task { await refreshStore() }
+            }
         }
         .offerCodeRedemption(isPresented: $showingRedemption) { result in
             switch result {
