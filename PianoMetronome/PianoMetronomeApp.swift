@@ -217,6 +217,7 @@ private struct MetronomeView: View {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .modifier(SettingsButtonBackground())
