@@ -95,6 +95,45 @@ private struct MetronomeView: View {
     @State private var tapPromptID: UUID?
 
     var body: some View {
+        layout
+        .task(id: tapPromptID) { [tapPromptID] in
+            guard let tapPromptID else { return }
+            do {
+                try await Task.sleep(for: .seconds(2))
+                if self.tapPromptID == tapPromptID { self.tapPromptID = nil }
+            } catch {
+                // A new tap restarts the two-second prompt.
+            }
+        }
+        .focusable()
+        .focusEffectDisabled()
+        .focused($keyboardFocused)
+        .onAppear { keyboardFocused = true }
+        .onKeyPress(.space, phases: .down) { _ in
+            guard panel == nil, !needsPurchase else { return .ignored }
+            togglePlayback()
+            return .handled
+        }
+        .background(MetronomePalette.background.ignoresSafeArea())
+        .tint(MetronomePalette.cyan)
+        .preferredColorScheme(.dark)
+        .onChange(of: needsPurchase) { _, required in
+            if required { panel = nil }
+        }
+        .sheet(item: presentedPanel, onDismiss: { keyboardFocused = true }) { panel in
+            panelView(panel)
+        }
+        .alert("节拍器", isPresented: Binding(
+            get: { !needsPurchase && metronome.error != nil },
+            set: { if !$0 { metronome.error = nil } }
+        )) {
+            Button("好", role: .cancel) { metronome.error = nil }
+        } message: {
+            Text(metronome.error ?? "")
+        }
+    }
+
+    private var layout: some View {
         GeometryReader { viewport in
             let width = max(0, min(viewport.size.width, 900) - 32)
             let height = viewport.size.height
@@ -144,54 +183,28 @@ private struct MetronomeView: View {
                 .frame(maxWidth: .infinity)
                 .background(MetronomePalette.background)
         }
-        .task(id: tapPromptID) { [tapPromptID] in
-            guard let tapPromptID else { return }
-            do {
-                try await Task.sleep(for: .seconds(2))
-                if self.tapPromptID == tapPromptID { self.tapPromptID = nil }
-            } catch {
-                // A new tap restarts the two-second prompt.
-            }
-        }
-        .focusable()
-        .focusEffectDisabled()
-        .focused($keyboardFocused)
-        .onAppear { keyboardFocused = true }
-        .onKeyPress(.space, phases: .down) { _ in
-            guard panel == nil, !needsPurchase else { return .ignored }
-            togglePlayback()
-            return .handled
-        }
-        .background(MetronomePalette.background.ignoresSafeArea())
-        .tint(MetronomePalette.cyan)
-        .preferredColorScheme(.dark)
-        .onChange(of: needsPurchase) { _, required in
-            if required { panel = nil }
-        }
-        .sheet(item: Binding<Panel?>(
+    }
+
+    private var presentedPanel: Binding<Panel?> {
+        Binding(
             get: { needsPurchase ? .subscription : panel },
-            set: { panel = $0 }
-        ), onDismiss: { keyboardFocused = true }) { panel in
-            switch panel {
-            case .meter: MeterEditor(metronome: metronome)
-            case .presets:
-                NavigationStack {
-                    MetronomePresetsView(metronome: metronome, showsCloseButton: true)
-                        .navigationBarTitleDisplayMode(.inline)
-                }
-            case .settings: MetronomeSettingsView(metronome: metronome)
-            case .subscription:
-                MetronomeSubscriptionView(subscription: metronome.subscription)
-                    .interactiveDismissDisabled()
+            set: { if $0 == nil { panel = nil } }
+        )
+    }
+
+    @ViewBuilder
+    private func panelView(_ panel: Panel) -> some View {
+        switch panel {
+        case .meter: MeterEditor(metronome: metronome)
+        case .presets:
+            NavigationStack {
+                MetronomePresetsView(metronome: metronome, showsCloseButton: true)
+                    .navigationBarTitleDisplayMode(.inline)
             }
-        }
-        .alert("节拍器", isPresented: Binding(
-            get: { !needsPurchase && metronome.error != nil },
-            set: { if !$0 { metronome.error = nil } }
-        )) {
-            Button("好", role: .cancel) { metronome.error = nil }
-        } message: {
-            Text(metronome.error ?? "")
+        case .settings: MetronomeSettingsView(metronome: metronome)
+        case .subscription:
+            MetronomeSubscriptionView(subscription: metronome.subscription)
+                .interactiveDismissDisabled()
         }
     }
 
