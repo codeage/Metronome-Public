@@ -265,11 +265,11 @@ private struct MetronomeView: View {
         let spacing: CGFloat = 8
         let availableWidth = max(0, width - spacing)
         let meterWidth = min(120, availableWidth * 0.38)
-        let rhythmWidth = availableWidth - meterWidth
+        let rhythmWidth = min(188, availableWidth * 0.52)
         let custom = String(localized: "自定义拍号")
         let options = MeterOption.displayOrder.map(\.rawValue) + [custom]
         let locked = hasAccess ? Set<String>() : Set(options.filter { !BeatSettings.freeMeters.contains($0) })
-        return HStack(spacing: spacing) {
+        return HStack(spacing: 0) {
             StableOptionMenu(
                 title: String(localized: "拍号"), selection: metronome.settings.meter,
                 options: options, identifier: "meter-option", compactWidth: meterWidth, lockedOptions: locked
@@ -287,6 +287,8 @@ private struct MetronomeView: View {
                 metronome.perform { try metronome.update(settings) }
             }
             .frame(width: meterWidth, height: 44)
+
+            Spacer(minLength: spacing)
 
             StableOptionMenu(
                 title: String(localized: "细分节奏"), selection: metronome.settings.rhythm.title,

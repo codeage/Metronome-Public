@@ -409,12 +409,21 @@ struct StableOptionMenu: UIViewRepresentable {
         button.accessibilityLabel = title
         button.accessibilityValue = selection
         if menuChanged {
+            // UIKit draws the native selection mark in a separate column from action images.
+            let usesStatusImages = !lockedOptions.isEmpty
             button.menu = UIMenu(children: options.map { option in
-                let locked = lockedOptions.contains(option)
+                let isSelected = option == selection
+                let image: UIImage?
+                if lockedOptions.contains(option) {
+                    image = UIImage(systemName: "lock.fill")
+                } else if usesStatusImages && isSelected {
+                    image = UIImage(systemName: "checkmark")
+                } else {
+                    image = nil
+                }
                 return UIAction(title: option,
-                                subtitle: locked ? String(localized: "需要买断") : nil,
-                                image: locked ? UIImage(systemName: "lock.fill") : nil,
-                                state: option == selection ? .on : .off) { [weak coordinator] _ in
+                                image: image,
+                                state: !usesStatusImages && isSelected ? .on : .off) { [weak coordinator] _ in
                     coordinator?.select?(option)
                 }
             })
