@@ -204,37 +204,19 @@ struct MetronomeSubscriptionView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("解锁全部功能")
-                    .font(.largeTitle.bold())
+                    .font(.title2.bold())
                     .accessibilityAddTraits(.isHeader)
 
-                if !buyoutOnly {
-                    purchaseCard("年度订阅", price: annual.map { String(localized: "\($0.displayPrice) / 年") }) {
-                        if let annual, showsFreeTrial {
-                            Text("免费试用 7 天，之后以 \(annual.displayPrice)/年自动续订。如不想续订，请在试用结束至少 24 小时前取消。")
-                        } else {
-                            Text("按年自动续订，可在 App Store 管理或取消。")
-                        }
-                        if let annual {
-                            purchaseButton(showsFreeTrial ? LocalizedStringKey("开始 7 天免费试用") : LocalizedStringKey("订阅一年")) {
-                                Task { await buy(annual) }
-                            }
-                        }
-                    }
+                VStack(spacing: 8) {
+                    purchaseOptions
                 }
 
-                purchaseCard("一次性买断", price: lifetime?.displayPrice) {
-                    Text("一次付款，永久解锁本 App 的全部节拍器功能。")
-                    if let lifetime {
-                        purchaseButton("立即买断") {
-                            if buyoutOnly && subscription.hasAccess {
-                                confirmingBuyout = true
-                            } else {
-                                Task { await buy(lifetime) }
-                            }
-                        }
-                    }
+                if !buyoutOnly && showsFreeTrial {
+                    Text("若不想试用转为付费，请至少在试用结束前 24 小时取消。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 if loading {
@@ -244,19 +226,14 @@ struct MetronomeSubscriptionView: View {
                         .disabled(busy)
                 }
 
-                if !buyoutOnly && subscription.canContinueTesting {
-                    purchaseButton("继续测试") { subscription.continueTesting() }
-                    Text("仅本次启动有效。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
                 accountActions
             }
             .frame(maxWidth: 480, alignment: .leading)
             .padding()
             .frame(maxWidth: .infinity)
         }
+        .background(MetronomePalette.background)
+        .tint(MetronomePalette.cyan)
         .task { await loadProducts() }
         .task {
             if !buyoutOnly { await subscription.checkTestBuild() }
@@ -293,41 +270,96 @@ struct MetronomeSubscriptionView: View {
         }
     }
 
-    private func purchaseCard<Content: View>(
-        _ title: LocalizedStringKey, price: String?, @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-            if let price {
-                Text(price).font(.title2.bold())
-            } else if !loading {
-                Text("暂时无法获取价格").foregroundStyle(.secondary)
+    @ViewBuilder
+    private var purchaseOptions: some View {
+        if !buyoutOnly, let annual {
+            if showsFreeTrial {
+                purchaseOption("开始 7 天免费试用",
+                               detail: "试用期免费，之后以 \(annual.displayPrice)/年自动续订。",
+                               emphasized: true) {
+                    Task { await buy(annual, requiresFreeTrial: true) }
+                }
             }
-            content()
+
+            purchaseOption("按年订阅", detail: showsFreeTrial
+                           ? "\(annual.displayPrice)/年自动续订，适用的试用优惠以 Apple 确认为准。"
+                           : "\(annual.displayPrice)/年自动续订。") {
+                Task { await buy(annual) }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+
+        if let lifetime {
+            purchaseOption("一次性买断", detail: "一次支付 \(lifetime.displayPrice)，永久解锁全部功能。") {
+                if buyoutOnly && subscription.hasAccess {
+                    confirmingBuyout = true
+                } else {
+                    Task { await buy(lifetime) }
+                }
+            }
+        }
     }
 
-    private func purchaseButton(_ title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+    private func purchaseOption(_ title: LocalizedStringKey, detail: LocalizedStringKey,
+                                emphasized: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.headline)
+                    Text(detail).font(.footnote).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(MetronomePalette.cyan)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(minHeight: 68)
+            .background(emphasized ? MetronomePalette.track : MetronomePalette.surface,
+                        in: RoundedRectangle(cornerRadius: 14))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+            .multilineTextAlignment(.leading)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    private var accountActions: some View {
+        VStack(spacing: 0) {
+            Divider()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) { purchaseSupportActions.fixedSize() }
+                VStack(spacing: 0) { purchaseSupportActions }
+            }
+
+            if !buyoutOnly && subscription.canContinueTesting {
+                VStack(spacing: 0) {
+                    Button("继续测试") { subscription.continueTesting() }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                    Text("仅本次启动有效。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 18) {
+                Link("使用条款", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                Button("隐私政策") { showingPrivacy = true }
+            }
+            .frame(minHeight: 44)
+        }
+        .font(.footnote)
+        .tint(.secondary)
         .disabled(busy)
     }
 
     @ViewBuilder
-    private var accountActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button("恢复购买") { Task { await restorePurchases() } }
-            Button("兑换优惠码") { showingRedemption = true }
-            Button("管理订阅") { showingManagement = true }
-            Link("使用条款", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
-            Button("隐私政策") { showingPrivacy = true }
-        }
-        .disabled(busy)
+    private var purchaseSupportActions: some View {
+        Button("恢复购买") { Task { await restorePurchases() } }.frame(minHeight: 44)
+        Button("兑换优惠码") { showingRedemption = true }.frame(minHeight: 44)
+        Button("管理订阅") { showingManagement = true }.frame(minHeight: 44)
     }
 
     private var privacyPolicy: some View {
@@ -365,11 +397,19 @@ struct MetronomeSubscriptionView: View {
         if !subscription.hasAccess { await loadProducts() }
     }
 
-    private func buy(_ product: Product) async {
+    private func buy(_ product: Product, requiresFreeTrial: Bool = false) async {
         guard !busy, !subscription.ownsLifetime,
               product.id != MetronomeSubscription.annualProductID || !subscription.hasAccess else { return }
         busy = true
         defer { busy = false }
+        if requiresFreeTrial {
+            let stillEligible = await MetronomeSubscription.offersSevenDayTrial(product)
+            guard !subscription.hasAccess else { return }
+            guard stillEligible else {
+                await loadProducts()
+                return
+            }
+        }
         message = await subscription.purchaseMessage(for: product, using: purchase)
     }
 

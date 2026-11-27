@@ -2161,6 +2161,102 @@
         }
       }
     },
+    "按年订阅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annual Subscription"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按年訂閱"
+          }
+        }
+      }
+    },
+    "试用期免费，之后以 %@/年自动续订。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free during the trial, then automatically renews at %@ per year."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試用期免費，之後以 %@／年自動續訂。"
+          }
+        }
+      }
+    },
+    "%@/年自动续订，适用的试用优惠以 Apple 确认为准。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically renews at %@ per year. Apple confirms any available free trial."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@／年自動續訂，適用的試用優惠以 Apple 確認為準。"
+          }
+        }
+      }
+    },
+    "%@/年自动续订。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically renews at %@ per year."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@／年自動續訂。"
+          }
+        }
+      }
+    },
+    "一次支付 %@，永久解锁全部功能。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pay %@ once to unlock all features permanently."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一次支付 %@，永久解鎖全部功能。"
+          }
+        }
+      }
+    },
+    "若不想试用转为付费，请至少在试用结束前 24 小时取消。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To avoid charges, cancel at least 24 hours before the trial ends."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若不想試用轉為付費，請至少在試用結束前 24 小時取消。"
+          }
+        }
+      }
+    },
     "一次性买断": {
       "localizations": {
         "en": {
