@@ -244,11 +244,15 @@ struct BeatSoundMenu: View {
     @ObservedObject var metronome: Metronome
     let identifier: String
 
+    private static let displayOrder: [BeatSound] = [
+        .mechanical, .wood, .electronic, .voice, .bell, .softTap, .shortDrum
+    ]
+
     var body: some View {
         StableOptionMenu(title: String(localized: "音色"), selection: metronome.settings.sound.title,
-                         options: BeatSound.allCases.map(\.title), identifier: identifier) { value in
-            if let sound = BeatSound.allCases.first(where: { $0.title == value }) {
-                metronome.setting(\.sound).wrappedValue = sound
+                         options: Self.displayOrder.map(\.title), identifier: identifier) { value in
+            if let sound = Self.displayOrder.first(where: { $0.title == value }) {
+                metronome.perform { try metronome.selectSound(sound) }
             }
         }
     }

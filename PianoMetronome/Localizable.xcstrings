@@ -433,6 +433,54 @@
         }
       }
     },
+    "铃声": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bell"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鈴聲"
+          }
+        }
+      }
+    },
+    "轻点声": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soft Tap"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輕點聲"
+          }
+        }
+      }
+    },
+    "短鼓声": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Short Drum"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短鼓聲"
+          }
+        }
+      }
+    },
     "蜂鸣": {
       "localizations": {
         "en": {

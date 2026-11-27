@@ -56,9 +56,6 @@ final class Metronome: ObservableObject {
                                   max(preferences.tempoRange.lowerBound, initialSettings.bpm))
         initialSettings.beats = min(preferences.beatsRange.upperBound, initialSettings.beats)
         settings = initialSettings
-        if preferences.migrateVolumeDefault() {
-            Self.write(preferences, key: "metronomePreferences")
-        }
         self.preferences = preferences
         presets = (Self.read([MetronomePreset].self, key: "metronomePresets") ?? [])
             .filter { $0.settings.isValid }
@@ -100,6 +97,14 @@ final class Metronome: ObservableObject {
         save(value)
         audio?.configure(settings, preferences)
         syncLiveActivity()
+    }
+
+    func selectSound(_ sound: BeatSound) throws {
+        var next = settings
+        next.sound = sound
+        try update(next)
+        guard !playing, let audio else { return }
+        try audio.preview(next, preferences)
     }
 
     func changePreferences(_ value: MetronomePreferences) throws {
@@ -190,6 +195,8 @@ final class Metronome: ObservableObject {
         if foreground {
             if playing { recoverAudio() }
             syncLiveActivity()
+        } else {
+            audio?.stopPreview()
         }
     }
 

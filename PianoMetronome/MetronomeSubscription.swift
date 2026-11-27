@@ -27,7 +27,17 @@ final class MetronomeSubscription: ObservableObject {
     private let isLayoutPreview = ProcessInfo.processInfo.arguments.contains("--metronome-layout-preview")
     #endif
 
+    static var isAudioComparison: Bool {
+        #if METRONOME_AUDIO_COMPARISON
+        return Bundle.main.bundleIdentifier == "com.bytereset.metronome.audioa"
+            || Bundle.main.bundleIdentifier == "com.bytereset.metronome.audiob"
+        #else
+        return false
+        #endif
+    }
+
     init() {
+        guard !Self.isAudioComparison else { return }
         Task { [weak self] in
             for await result in StoreKit.Transaction.updates {
                 guard let self else { return }
@@ -44,7 +54,7 @@ final class MetronomeSubscription: ObservableObject {
         #if targetEnvironment(simulator)
         if isLayoutPreview { return true }
         #endif
-        if testingSession { return true }
+        if Self.isAudioComparison || testingSession { return true }
         return switch access {
         case .lifetime: true
         case .active(let expiration): expiration > .now
@@ -122,6 +132,7 @@ final class MetronomeSubscription: ObservableObject {
     }
 
     func refresh() async {
+        guard !Self.isAudioComparison else { return }
         #if targetEnvironment(simulator)
         guard !isLayoutPreview else { return }
         #endif

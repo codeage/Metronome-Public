@@ -33,7 +33,14 @@ enum BeatRhythm: Int, CaseIterable, Codable, Sendable, Identifiable {
 }
 
 enum BeatSound: Int, CaseIterable, Codable, Sendable, Identifiable {
-    case mechanical, electronic, wood, voice
+    // Persisted in settings and presets and passed to MetronomeRenderer.c.
+    case mechanical = 0
+    case electronic = 1
+    case wood = 2
+    case voice = 3
+    case bell = 4
+    case softTap = 5
+    case shortDrum = 6
 
     var id: Self { self }
     var title: String {
@@ -42,6 +49,9 @@ enum BeatSound: Int, CaseIterable, Codable, Sendable, Identifiable {
         case .electronic: String(localized: "蜂鸣")
         case .wood: String(localized: "木鱼")
         case .voice: String(localized: "人声")
+        case .bell: String(localized: "铃声")
+        case .softTap: String(localized: "轻点声")
+        case .shortDrum: String(localized: "短鼓声")
         }
     }
 }
@@ -70,17 +80,9 @@ struct MetronomePreferences: Equatable, Codable, Sendable {
     var haptics = false
     var offsetMilliseconds = 0
     var volume = 1.0
-    private var volumeProfileVersion: Int? = 1
     var balance = 0.0
     var trainer = SpeedTrainer()
     var ghost = SilentBars()
-
-    mutating func migrateVolumeDefault() -> Bool {
-        guard volumeProfileVersion == nil else { return false }
-        if volume == 0.8 { volume = 1 }
-        volumeProfileVersion = 1
-        return true
-    }
 
     var tempoRange: ClosedRange<Int> { professionalTempo ? 20...300 : 30...250 }
     var beatsRange: ClosedRange<Int> { 1...(extendedMeter ? 32 : 16) }

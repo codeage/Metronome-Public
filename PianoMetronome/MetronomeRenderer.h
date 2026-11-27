@@ -26,6 +26,8 @@ void metronome_destroy(MetronomeRenderer *renderer);
 void metronome_configure(MetronomeRenderer *renderer, MetronomeRenderSettings settings);
 // Only call while the audio engine is stopped.
 void metronome_reset(MetronomeRenderer *renderer);
+// With the engine stopped, prepare a single audition and return its sample count.
+uint32_t metronome_prepare_preview(MetronomeRenderer *renderer);
 void metronome_render(MetronomeRenderer *renderer, float *left, float *right,
                       uint32_t frames, double hostSeconds);
 bool metronome_event_at(MetronomeRenderer *renderer, double hostSeconds, MetronomeBeatEvent *event);

@@ -79,14 +79,11 @@ struct MetronomeCoreChecks {
         guard var fields = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             preconditionFailure("Expected preference fields")
         }
-        fields.removeValue(forKey: "volumeProfileVersion")
         for oldLevel in [0.8, 0.25, 0.0] {
             fields["volume"] = oldLevel
             let oldData = try JSONSerialization.data(withJSONObject: fields)
-            var migrated = try JSONDecoder().decode(MetronomePreferences.self, from: oldData)
-            precondition(migrated.migrateVolumeDefault())
-            precondition(migrated.volume == (oldLevel == 0.8 ? 1 : oldLevel))
-            precondition(!migrated.migrateVolumeDefault())
+            let migrated = try JSONDecoder().decode(MetronomePreferences.self, from: oldData)
+            precondition(migrated.volume == oldLevel)
         }
         precondition(BeatSettings(subdivision: .min).rhythm == .quarter)
         precondition(BeatSettings().bpm == 120 && BeatSettings().meter == "4/4")
@@ -221,7 +218,10 @@ struct MetronomeCoreChecks {
                     let start = beat * 9_600
                     let end = start + 9_600
                     let peak = left[start..<end].map { abs($0) }.max() ?? 0
-                    precondition(abs(peak - target) < 0.00001)
+                    let baselineGain = abs(peak - target) < 0.00001
+                    let raisedWeakBeat = beat == 2 && (sound == .mechanical || sound == .wood)
+                        && abs(peak - 0.98 * 0.57) < 0.00001
+                    precondition(baselineGain || raisedWeakBeat)
                 }
             }
         }

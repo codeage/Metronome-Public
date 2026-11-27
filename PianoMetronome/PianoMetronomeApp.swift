@@ -23,7 +23,7 @@ struct PianoMetronomeApp: App {
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 metronome.setForeground(phase == .active)
-                if phase == .active && !didCheckForUpdate {
+                if phase == .active && !didCheckForUpdate && !MetronomeSubscription.isAudioComparison {
                     didCheckForUpdate = true
                     Task { availableUpdate = await MetronomeUpdate.checkAtLaunch() }
                 }
