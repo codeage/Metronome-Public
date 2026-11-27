@@ -158,6 +158,15 @@ final class Metronome: ObservableObject {
             try update(next)
             return
         }
+        try startPlayback(next)
+    }
+
+    func startPurchasePreview() throws {
+        guard subscription.needsPurchase, !playing else { return }
+        try startPlayback(settings)
+    }
+
+    private func startPlayback(_ next: BeatSettings) throws {
         guard let audio else { throw MetronomeError.audioUnavailable }
         audio.configure(next, preferences)
         try audio.start(mixing: preferences.mixWithOthers)

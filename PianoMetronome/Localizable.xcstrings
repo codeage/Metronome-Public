@@ -1073,6 +1073,54 @@
         }
       }
     },
+    "其他购买方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other Purchase Options"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他購買方式"
+          }
+        }
+      }
+    },
+    "查看购买方案": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View Purchase Options"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看購買方案"
+          }
+        }
+      }
+    },
+    "试用节拍器全部功能": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try all metronome features"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試用節拍器全部功能"
+          }
+        }
+      }
+    },
     "免费试用 7 天，之后以 %@/年自动续订。如不想续订，请在试用结束至少 24 小时前取消。": {
       "localizations": {
         "en": {

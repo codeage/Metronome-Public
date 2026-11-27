@@ -74,6 +74,40 @@ final class MetronomeSubscription: ObservableObject {
         guard hasAccess else { throw MetronomeError.subscriptionRequired }
     }
 
+    static func annualProduct(in products: [Product]) -> Product? {
+        products.first {
+            guard $0.id == annualProductID, $0.type == .autoRenewable,
+                  let period = $0.subscription?.subscriptionPeriod else { return false }
+            return period.unit == .year && period.value == 1
+        }
+    }
+
+    static func offersSevenDayTrial(_ product: Product?) async -> Bool {
+        guard let plan = product?.subscription, let offer = plan.introductoryOffer,
+              offer.paymentMode == .freeTrial, offer.periodCount == 1,
+              (offer.period.unit == .week && offer.period.value == 1)
+              || (offer.period.unit == .day && offer.period.value == 7) else { return false }
+        return await plan.isEligibleForIntroOffer
+    }
+
+    func purchaseMessage(for product: Product, using purchase: PurchaseAction) async -> String? {
+        do {
+            switch try await purchase(product) {
+            case .success(let result):
+                if await accept(result) { return nil }
+                return String(localized: "无法验证这笔购买。请稍后恢复购买。")
+            case .pending:
+                return String(localized: "购买正在等待 Apple 确认。完成后将自动解锁。")
+            case .userCancelled:
+                return nil
+            @unknown default:
+                return String(localized: "暂时无法确认购买状态。请稍后恢复购买。")
+            }
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func accept(_ result: VerificationResult<StoreKit.Transaction>) async -> Bool {
         guard case .verified(let transaction) = result else { return false }
         switch (transaction.productID, transaction.productType) {
@@ -161,12 +195,7 @@ struct MetronomeSubscriptionView: View {
     @State private var message: String?
 
     private var annual: Product? {
-        products.first {
-            guard $0.id == MetronomeSubscription.annualProductID,
-                  $0.type == .autoRenewable,
-                  let period = $0.subscription?.subscriptionPeriod else { return false }
-            return period.unit == .year && period.value == 1
-        }
+        MetronomeSubscription.annualProduct(in: products)
     }
 
     private var lifetime: Product? {
@@ -321,16 +350,10 @@ struct MetronomeSubscriptionView: View {
         do {
             let availableProducts = try await Product.products(for: ids)
             guard !Task.isCancelled else { return }
-            if let plan = availableProducts.first(where: { $0.id == MetronomeSubscription.annualProductID })?.subscription,
-               let offer = plan.introductoryOffer, offer.paymentMode == .freeTrial,
-               offer.periodCount == 1,
-               (offer.period.unit == .week && offer.period.value == 1)
-               || (offer.period.unit == .day && offer.period.value == 7) {
-                showsFreeTrial = await plan.isEligibleForIntroOffer
-            } else {
-                showsFreeTrial = false
-            }
+            let isEligible = await MetronomeSubscription.offersSevenDayTrial(
+                MetronomeSubscription.annualProduct(in: availableProducts))
             guard !Task.isCancelled else { return }
+            showsFreeTrial = isEligible
             products = availableProducts
         } catch {
             if !Task.isCancelled && products.isEmpty { message = error.localizedDescription }
@@ -347,23 +370,7 @@ struct MetronomeSubscriptionView: View {
               product.id != MetronomeSubscription.annualProductID || !subscription.hasAccess else { return }
         busy = true
         defer { busy = false }
-        do {
-            switch try await purchase(product) {
-            case .success(let result):
-                let verified = await subscription.accept(result)
-                if !verified {
-                    message = String(localized: "无法验证这笔购买。请稍后恢复购买。")
-                }
-            case .pending:
-                message = String(localized: "购买正在等待 Apple 确认。完成后将自动解锁。")
-            case .userCancelled:
-                return
-            @unknown default:
-                message = String(localized: "暂时无法确认购买状态。请稍后恢复购买。")
-            }
-        } catch {
-            message = error.localizedDescription
-        }
+        message = await subscription.purchaseMessage(for: product, using: purchase)
     }
 
     private func restorePurchases() async {

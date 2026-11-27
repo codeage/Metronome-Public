@@ -293,7 +293,8 @@ struct StableOptionMenu: UIViewRepresentable {
 
     func updateUIView(_ button: UIButton, context: Context) {
         let coordinator = context.coordinator
-        coordinator.select = select
+        button.isEnabled = context.environment.isEnabled
+        coordinator.select = button.isEnabled ? select : nil
         let category = button.traitCollection.preferredContentSizeCategory
         let menuChanged = coordinator.selection != selection || coordinator.options != options
         // Playback can redraw the parent on every beat. Keep the open menu and its selection intact.
