@@ -193,22 +193,6 @@
         }
       }
     },
-    "按年自动续订，可在 App Store 管理或取消。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renews annually. Manage or cancel in the App Store."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按年自動續訂，可在 App Store 管理或取消。"
-          }
-        }
-      }
-    },
     "八分音符": {
       "localizations": {
         "en": {
@@ -449,22 +433,6 @@
         }
       }
     },
-    "订阅一年": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Subscribe for One Year"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "訂閱一年"
-          }
-        }
-      }
-    },
     "兑换优惠码": {
       "localizations": {
         "en": {
@@ -625,22 +593,6 @@
         }
       }
     },
-    "改为一次性买断": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switch to Lifetime Access"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "改為一次性買斷"
-          }
-        }
-      }
-    },
     "购买正在等待 Apple 确认。完成后将自动解锁。": {
       "localizations": {
         "en": {
@@ -653,22 +605,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "購買正在等待 Apple 確認。完成後會自動解鎖。"
-          }
-        }
-      }
-    },
-    "管理订阅": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Manage Subscription"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "管理訂閱"
           }
         }
       }
@@ -733,22 +669,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "繼續測試"
-          }
-        }
-      }
-    },
-    "继续买断": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continue to Purchase"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "繼續買斷"
           }
         }
       }
@@ -865,18 +785,18 @@
         }
       }
     },
-    "节拍器无需注册账户。节拍设置和曲目预设存储在设备上。购买和订阅由 Apple 处理，节拍器通过 StoreKit 确认购买权益。": {
+    "节拍器无需注册账户。节拍设置和曲目预设存储在设备上。购买由 Apple 处理，节拍器通过 StoreKit 确认购买权益。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No account is required. Metronome settings and song presets are stored on your device. Apple processes purchases and subscriptions. The app uses StoreKit to verify access."
+            "value": "No account is required. Metronome settings and song presets are stored on your device. Apple processes purchases. The app uses StoreKit to verify purchases."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "節拍器無需註冊帳號。節拍設定和曲目預設儲存在裝置上。購買與訂閱由 Apple 處理，節拍器透過 StoreKit 確認購買權益。"
+            "value": "節拍器無需註冊帳號。節拍設定和曲目預設儲存在裝置上。購買由 Apple 處理，節拍器透過 StoreKit 確認購買權益。"
           }
         }
       }
@@ -1025,22 +945,6 @@
         }
       }
     },
-    "开始 7 天免费试用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start 7-Day Free Trial"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "開始 7 天免費試用"
-          }
-        }
-      }
-    },
     "扩展至每小节 32 拍": {
       "localizations": {
         "en": {
@@ -1085,22 +989,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "連續點按三到四次"
-          }
-        }
-      }
-    },
-    "买断不会关闭原订阅的自动续订。如果续订仍开启，请在「管理订阅」中关闭，以免下次扣费。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Buying lifetime access does not cancel your current subscription. To avoid another charge, turn off auto-renewal in Manage Subscription."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "買斷不會停止原訂閱自動續訂。如果續訂仍開啟，請在「管理訂閱」中關閉，以免下次扣款。"
           }
         }
       }
@@ -1265,38 +1153,6 @@
         }
       }
     },
-    "试用节拍器全部功能": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try all metronome features"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "試用節拍器全部功能"
-          }
-        }
-      }
-    },
-    "免费试用 7 天，之后以 %@/年自动续订。如不想续订，请在试用结束至少 24 小时前取消。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try it free for 7 days, then the subscription renews automatically at %@ per year. To avoid renewal, cancel at least 24 hours before the trial ends."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "免費試用 7 天，之後以 %@／年自動續訂。若不想續訂，請在試用結束至少 24 小時前取消。"
-          }
-        }
-      }
-    },
     "默认输出": {
       "localizations": {
         "en": {
@@ -1341,22 +1197,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "目標速度 %lld"
-          }
-        }
-      }
-    },
-    "年度订阅": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annual Subscription"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "年度訂閱"
           }
         }
       }
@@ -1533,22 +1373,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "切換重音"
-          }
-        }
-      }
-    },
-    "请打开节拍器，订阅、买断或恢复购买后再使用。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open the metronome to subscribe, buy lifetime access, or restore a purchase."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "請開啟節拍器，訂閱、買斷或回復購買後再使用。"
           }
         }
       }
@@ -2129,18 +1953,18 @@
         }
       }
     },
-    "未找到有效的节拍器订阅或买断记录。": {
+    "未找到节拍器的买断记录。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No active metronome subscription or lifetime purchase was found."
+            "value": "No metronome lifetime purchase was found."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "找不到有效的節拍器訂閱或買斷記錄。"
+            "value": "找不到節拍器的買斷記錄。"
           }
         }
       }
@@ -2321,70 +2145,6 @@
         }
       }
     },
-    "按年订阅": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annual Subscription"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按年訂閱"
-          }
-        }
-      }
-    },
-    "试用期免费，之后以 %@/年自动续订。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Free during the trial, then automatically renews at %@ per year."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "試用期免費，之後以 %@／年自動續訂。"
-          }
-        }
-      }
-    },
-    "%@/年自动续订，适用的试用优惠以 Apple 确认为准。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatically renews at %@ per year. Apple confirms any available free trial."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@／年自動續訂，適用的試用優惠以 Apple 確認為準。"
-          }
-        }
-      }
-    },
-    "%@/年自动续订。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatically renews at %@ per year."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@／年自動續訂。"
-          }
-        }
-      }
-    },
     "一次支付 %@，永久解锁全部功能。": {
       "localizations": {
         "en": {
@@ -2397,22 +2157,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "一次支付 %@，永久解鎖全部功能。"
-          }
-        }
-      }
-    },
-    "若不想试用转为付费，请至少在试用结束前 24 小时取消。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "To avoid charges, cancel at least 24 hours before the trial ends."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "若不想試用轉為付費，請至少在試用結束前 24 小時取消。"
           }
         }
       }
@@ -2653,22 +2397,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在載入價格…"
-          }
-        }
-      }
-    },
-    "正在检查订阅…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checking Subscription…"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在檢查訂閱…"
           }
         }
       }

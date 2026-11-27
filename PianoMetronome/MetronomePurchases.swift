@@ -3,27 +3,20 @@ import StoreKit
 import SwiftUI
 
 @MainActor
-final class MetronomeSubscription: ObservableObject {
-    static let annualProductID = "com.bytereset.metronome.annual"
+final class MetronomePurchases: ObservableObject {
     static let lifetimeProductID = "com.bytereset.metronome.lifetime"
 
-    // Keep recognizing transactions from TestFlight builds that offered the original products.
-    private static let annualEntitlementIDs: Set<String> = [annualProductID, "app.music.metronome.annual"]
+    // Early TestFlight builds used a different lifetime purchase identifier.
     private static let lifetimeEntitlementIDs: Set<String> = [lifetimeProductID, "app.music.metronome.lifetime"]
 
-    private enum Access: Equatable {
-        case checking, locked, active(until: Date), lifetime
-    }
-
-    @Published private var access: Access = .checking {
+    @Published private(set) var ownsLifetime = false {
         didSet {
-            if oldValue != access { onAccessChanged?(hasAccess) }
+            if oldValue != ownsLifetime { onAccessChanged?(hasAccess) }
         }
     }
     var onAccessChanged: ((Bool) -> Void)?
 
     private var refreshTask: Task<Void, Never>?
-    private var expirationTask: Task<Void, Never>?
 
     #if targetEnvironment(simulator)
     private let isLayoutPreview = ProcessInfo.processInfo.arguments.contains("--metronome-layout-preview")
@@ -38,21 +31,11 @@ final class MetronomeSubscription: ObservableObject {
         }
     }
 
-    var ownsLifetime: Bool { access == .lifetime }
-    var hasActiveSubscription: Bool {
-        guard case .active(let expiration) = access else { return false }
-        return expiration > .now
-    }
-
     var hasAccess: Bool {
         #if targetEnvironment(simulator)
         if isLayoutPreview { return true }
         #endif
-        return switch access {
-        case .lifetime: true
-        case .active(let expiration): expiration > .now
-        case .checking, .locked: false
-        }
+        return ownsLifetime
     }
 
     func purchaseMessage(for product: Product, using purchase: PurchaseAction) async -> String? {
@@ -74,16 +57,12 @@ final class MetronomeSubscription: ObservableObject {
     }
 
     func accept(_ result: VerificationResult<StoreKit.Transaction>) async -> Bool {
-        guard case .verified(let transaction) = result else { return false }
-        switch (transaction.productID, transaction.productType) {
-        case (let id, .autoRenewable) where Self.annualEntitlementIDs.contains(id),
-             (let id, .nonConsumable) where Self.lifetimeEntitlementIDs.contains(id):
-            await refresh()
-            await transaction.finish()
-            return true
-        default:
-            return false
-        }
+        guard case .verified(let transaction) = result,
+              transaction.productType == .nonConsumable,
+              Self.lifetimeEntitlementIDs.contains(transaction.productID) else { return false }
+        await refresh()
+        await transaction.finish()
+        return true
     }
 
     func refresh() async {
@@ -101,55 +80,29 @@ final class MetronomeSubscription: ObservableObject {
     }
 
     private func readEntitlement() async {
-        var latestExpiration: Date?
+        var found = false
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
-                  transaction.revocationDate == nil else { continue }
-            if Self.lifetimeEntitlementIDs.contains(transaction.productID), transaction.productType == .nonConsumable {
-                expirationTask?.cancel()
-                expirationTask = nil
-                if !ownsLifetime { access = .lifetime }
-                return
-            }
-            guard Self.annualEntitlementIDs.contains(transaction.productID),
-                  transaction.productType == .autoRenewable,
-                  !transaction.isUpgraded,
-                  let expiration = transaction.expirationDate else { continue }
-            latestExpiration = max(latestExpiration ?? expiration, expiration)
+                  transaction.revocationDate == nil,
+                  transaction.productType == .nonConsumable,
+                  Self.lifetimeEntitlementIDs.contains(transaction.productID) else { continue }
+            found = true
+            break
         }
-
-        expirationTask?.cancel()
-        expirationTask = nil
-        guard let latestExpiration, latestExpiration > .now else {
-            if access != .locked { access = .locked }
-            return
-        }
-
-        let next = Access.active(until: latestExpiration)
-        if access != next { access = next }
-        expirationTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .seconds(max(0, latestExpiration.timeIntervalSinceNow)))
-            } catch {
-                return
-            }
-            await self?.refresh()
-        }
+        if ownsLifetime != found { ownsLifetime = found }
     }
 }
 
 @MainActor
-struct MetronomeSubscriptionView: View {
-    @ObservedObject var subscription: MetronomeSubscription
+struct MetronomePurchaseView: View {
+    @ObservedObject var purchases: MetronomePurchases
     @Environment(\.purchase) private var purchase
     @Environment(\.dismiss) private var dismiss
     @State private var lifetime: Product?
     @State private var loading = true
     @State private var busy = false
-    @State private var showingManagement = false
     @State private var showingRedemption = false
     @State private var showingPrivacy = false
-    @State private var confirmingBuyout = false
     @State private var message: String?
 
     var body: some View {
@@ -177,28 +130,15 @@ struct MetronomeSubscriptionView: View {
         .background(MetronomePalette.background)
         .tint(MetronomePalette.cyan)
         .task {
-            await subscription.refresh()
+            await purchases.refresh()
             guard !Task.isCancelled else { return }
-            if subscription.ownsLifetime { dismiss() } else { await loadProducts() }
-        }
-        .manageSubscriptionsSheet(isPresented: $showingManagement)
-        .onChange(of: showingManagement) { _, isShowing in
-            if !isShowing { Task { await refreshStore() } }
+            if purchases.ownsLifetime { dismiss() } else { await loadProducts() }
         }
         .offerCodeRedemption(isPresented: $showingRedemption) { result in
             switch result {
             case .success: Task { await refreshStore() }
             case .failure(let error): message = error.localizedDescription
             }
-        }
-        .confirmationDialog("改为一次性买断", isPresented: $confirmingBuyout, titleVisibility: .visible) {
-            Button("继续买断") {
-                if let lifetime { Task { await buy(lifetime) } }
-            }
-            Button("管理订阅") { showingManagement = true }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("买断不会关闭原订阅的自动续订。如果续订仍开启，请在「管理订阅」中关闭，以免下次扣费。")
         }
         .alert("App Store", isPresented: Binding(
             get: { message != nil }, set: { if !$0 { message = nil } }
@@ -208,18 +148,14 @@ struct MetronomeSubscriptionView: View {
             Text(message ?? "")
         }
         .sheet(isPresented: $showingPrivacy) { privacyPolicy }
-        .onChange(of: subscription.ownsLifetime) { _, ownsLifetime in
+        .onChange(of: purchases.ownsLifetime) { _, ownsLifetime in
             if ownsLifetime { dismiss() }
         }
     }
 
     private func purchaseOption(_ product: Product) -> some View {
         Button {
-            if subscription.hasActiveSubscription {
-                confirmingBuyout = true
-            } else {
-                Task { await buy(product) }
-            }
+            Task { await buy(product) }
         } label: {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -268,9 +204,6 @@ struct MetronomeSubscriptionView: View {
     private var purchaseSupportActions: some View {
         Button("恢复购买") { Task { await restorePurchases() } }.frame(minHeight: 44)
         Button("兑换优惠码") { showingRedemption = true }.frame(minHeight: 44)
-        if subscription.hasActiveSubscription {
-            Button("管理订阅") { showingManagement = true }.frame(minHeight: 44)
-        }
     }
 
     private var privacyPolicy: some View {
@@ -288,24 +221,24 @@ struct MetronomeSubscriptionView: View {
         loading = true
         defer { loading = false }
         do {
-            let products = try await Product.products(for: [MetronomeSubscription.lifetimeProductID])
+            let products = try await Product.products(for: [MetronomePurchases.lifetimeProductID])
             guard !Task.isCancelled else { return }
-            lifetime = products.first { $0.id == MetronomeSubscription.lifetimeProductID && $0.type == .nonConsumable }
+            lifetime = products.first { $0.id == MetronomePurchases.lifetimeProductID && $0.type == .nonConsumable }
         } catch {
             if !Task.isCancelled && lifetime == nil { message = error.localizedDescription }
         }
     }
 
     private func refreshStore() async {
-        await subscription.refresh()
-        if !subscription.ownsLifetime && lifetime == nil { await loadProducts() }
+        await purchases.refresh()
+        if !purchases.ownsLifetime && lifetime == nil { await loadProducts() }
     }
 
     private func buy(_ product: Product) async {
-        guard !busy, !subscription.ownsLifetime else { return }
+        guard !busy, !purchases.ownsLifetime else { return }
         busy = true
         defer { busy = false }
-        message = await subscription.purchaseMessage(for: product, using: purchase)
+        message = await purchases.purchaseMessage(for: product, using: purchase)
     }
 
     private func restorePurchases() async {
@@ -315,7 +248,7 @@ struct MetronomeSubscriptionView: View {
         do {
             try await AppStore.sync()
             await refreshStore()
-            if !subscription.hasAccess { message = String(localized: "未找到有效的节拍器订阅或买断记录。") }
+            if !purchases.ownsLifetime { message = String(localized: "未找到节拍器的买断记录。") }
         } catch {
             message = error.localizedDescription
         }
@@ -324,12 +257,12 @@ struct MetronomeSubscriptionView: View {
 
 @MainActor
 struct MetronomePurchaseSheet: View {
-    let subscription: MetronomeSubscription
+    let purchases: MetronomePurchases
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            MetronomeSubscriptionView(subscription: subscription)
+            MetronomePurchaseView(purchases: purchases)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("完成") { dismiss() }
@@ -342,7 +275,7 @@ struct MetronomePurchaseSheet: View {
 struct MetronomePrivacyPolicyView: View {
     var body: some View {
         ScrollView {
-            Text("节拍器无需注册账户。节拍设置和曲目预设存储在设备上。购买和订阅由 Apple 处理，节拍器通过 StoreKit 确认购买权益。")
+            Text("节拍器无需注册账户。节拍设置和曲目预设存储在设备上。购买由 Apple 处理，节拍器通过 StoreKit 确认购买权益。")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
         }
