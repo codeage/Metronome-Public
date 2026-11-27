@@ -137,8 +137,9 @@ struct MetronomeSettingsView: View {
                 Section {
                     if purchases.ownsLifetime {
                         Label("已永久解锁", systemImage: "checkmark")
-                    } else {
+                    } else if !purchases.hasAccess {
                         Button("解锁全部拍号和音色", systemImage: "lock.fill") { showingPurchase = true }
+                            .tint(.primary)
                     }
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
@@ -229,6 +230,7 @@ struct MetronomeSettingsView: View {
                 Toggle("扩展至每小节 32 拍", isOn: metronome.option(\.extendedMeter))
             } else {
                 Button("扩展至每小节 32 拍", systemImage: "lock.fill") { showingPurchase = true }
+                    .tint(.primary)
                     .accessibilityValue("需要买断")
             }
         }
@@ -284,7 +286,8 @@ struct BeatSoundMenu: View {
     var body: some View {
         let locked = hasAccess ? Set<String>() : Set(Self.displayOrder.filter { $0 != .mechanical }.map(\.title))
         StableOptionMenu(title: String(localized: "音色"), selection: metronome.settings.sound.title,
-                         options: Self.displayOrder.map(\.title), identifier: identifier, lockedOptions: locked) { value in
+                         options: Self.displayOrder.map(\.title), identifier: identifier,
+                         lockedOptions: locked, foregroundColor: .label) { value in
             if locked.contains(value) {
                 showPurchase()
             } else if let sound = Self.displayOrder.first(where: { $0.title == value }) {
@@ -302,6 +305,7 @@ struct StableOptionMenu: UIViewRepresentable {
     let identifier: String
     var compactWidth: CGFloat?
     var lockedOptions: Set<String> = []
+    var foregroundColor = UIColor(MetronomePalette.cyan)
     let select: (String) -> Void
 
     @MainActor
@@ -369,7 +373,7 @@ struct StableOptionMenu: UIViewRepresentable {
                 return attributes
             }
         }
-        configuration.baseForegroundColor = UIColor(MetronomePalette.cyan)
+        configuration.baseForegroundColor = foregroundColor
         configuration.cornerStyle = .capsule
         configuration.image = chevron
         configuration.imagePlacement = .trailing

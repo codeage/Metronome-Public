@@ -9,14 +9,23 @@ final class MetronomePurchases: ObservableObject {
     // Early TestFlight builds used a different lifetime purchase identifier.
     private static let lifetimeEntitlementIDs: Set<String> = [lifetimeProductID, "app.music.metronome.lifetime"]
 
-    @Published private(set) var ownsLifetime = false {
+    private static let legacyAnnualIDs: Set<String> = [
+        "com.bytereset.metronome.annual", "app.music.metronome.annual"
+    ]
+
+    private enum Access: Equatable {
+        case free, legacy(until: Date), lifetime
+    }
+
+    @Published private var access: Access = .free {
         didSet {
-            if oldValue != ownsLifetime { onAccessChanged?(hasAccess) }
+            if oldValue != access { onAccessChanged?(hasAccess) }
         }
     }
     var onAccessChanged: ((Bool) -> Void)?
 
     private var refreshTask: Task<Void, Never>?
+    private var expirationTask: Task<Void, Never>?
 
     #if targetEnvironment(simulator)
     private let isLayoutPreview = ProcessInfo.processInfo.arguments.contains("--metronome-layout-preview")
@@ -31,11 +40,17 @@ final class MetronomePurchases: ObservableObject {
         }
     }
 
+    var ownsLifetime: Bool { access == .lifetime }
+
     var hasAccess: Bool {
         #if targetEnvironment(simulator)
         if isLayoutPreview { return true }
         #endif
-        return ownsLifetime
+        return switch access {
+        case .lifetime: true
+        case .legacy(let expiration): expiration > .now
+        case .free: false
+        }
     }
 
     func purchaseMessage(for product: Product, using purchase: PurchaseAction) async -> String? {
@@ -57,9 +72,14 @@ final class MetronomePurchases: ObservableObject {
     }
 
     func accept(_ result: VerificationResult<StoreKit.Transaction>) async -> Bool {
-        guard case .verified(let transaction) = result,
-              transaction.productType == .nonConsumable,
-              Self.lifetimeEntitlementIDs.contains(transaction.productID) else { return false }
+        guard case .verified(let transaction) = result else { return false }
+        switch (transaction.productID, transaction.productType) {
+        case (let id, .nonConsumable) where Self.lifetimeEntitlementIDs.contains(id),
+             (let id, .autoRenewable) where Self.legacyAnnualIDs.contains(id):
+            break
+        default:
+            return false
+        }
         await refresh()
         await transaction.finish()
         return true
@@ -80,16 +100,41 @@ final class MetronomePurchases: ObservableObject {
     }
 
     private func readEntitlement() async {
-        var found = false
+        var latestExpiration: Date?
         for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
-                  transaction.revocationDate == nil,
-                  transaction.productType == .nonConsumable,
-                  Self.lifetimeEntitlementIDs.contains(transaction.productID) else { continue }
-            found = true
-            break
+                  transaction.revocationDate == nil else { continue }
+            if transaction.productType == .nonConsumable,
+               Self.lifetimeEntitlementIDs.contains(transaction.productID) {
+                expirationTask?.cancel()
+                expirationTask = nil
+                if !ownsLifetime { access = .lifetime }
+                return
+            }
+            guard transaction.productType == .autoRenewable,
+                  Self.legacyAnnualIDs.contains(transaction.productID),
+                  !transaction.isUpgraded,
+                  let expiration = transaction.expirationDate else { continue }
+            latestExpiration = max(latestExpiration ?? expiration, expiration)
         }
-        if ownsLifetime != found { ownsLifetime = found }
+
+        expirationTask?.cancel()
+        expirationTask = nil
+        guard let latestExpiration, latestExpiration > .now else {
+            if access != .free { access = .free }
+            return
+        }
+
+        let next = Access.legacy(until: latestExpiration)
+        if access != next { access = next }
+        expirationTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(max(0, latestExpiration.timeIntervalSinceNow)))
+            } catch {
+                return
+            }
+            await self?.refresh()
+        }
     }
 }
 
@@ -132,7 +177,7 @@ struct MetronomePurchaseView: View {
         .task {
             await purchases.refresh()
             guard !Task.isCancelled else { return }
-            if purchases.ownsLifetime { dismiss() } else { await loadProducts() }
+            if purchases.hasAccess { dismiss() } else { await loadProducts() }
         }
         .offerCodeRedemption(isPresented: $showingRedemption) { result in
             switch result {
@@ -148,8 +193,8 @@ struct MetronomePurchaseView: View {
             Text(message ?? "")
         }
         .sheet(isPresented: $showingPrivacy) { privacyPolicy }
-        .onChange(of: purchases.ownsLifetime) { _, ownsLifetime in
-            if ownsLifetime { dismiss() }
+        .onChange(of: purchases.hasAccess) { _, hasAccess in
+            if hasAccess { dismiss() }
         }
     }
 
@@ -231,11 +276,11 @@ struct MetronomePurchaseView: View {
 
     private func refreshStore() async {
         await purchases.refresh()
-        if !purchases.ownsLifetime && lifetime == nil { await loadProducts() }
+        if !purchases.hasAccess && lifetime == nil { await loadProducts() }
     }
 
     private func buy(_ product: Product) async {
-        guard !busy, !purchases.ownsLifetime else { return }
+        guard !busy, !purchases.hasAccess else { return }
         busy = true
         defer { busy = false }
         message = await purchases.purchaseMessage(for: product, using: purchase)
@@ -248,7 +293,7 @@ struct MetronomePurchaseView: View {
         do {
             try await AppStore.sync()
             await refreshStore()
-            if !purchases.ownsLifetime { message = String(localized: "未找到节拍器的买断记录。") }
+            if !purchases.hasAccess { message = String(localized: "未找到节拍器的买断记录。") }
         } catch {
             message = error.localizedDescription
         }
