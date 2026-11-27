@@ -132,9 +132,10 @@ MetronomeRenderer *metronome_create(double sampleRate) {
     for (int i = 0; i < maxBeats; ++i) atomic_init(&r->voiceCounts[i], 0);
     r->settings = (MetronomeRenderSettings){.bpm = 120, .beats = 4, .volume = 1, .accents = 0xa8};
     r->toneFrames = (uint32_t)fmin(4096, sampleRate * 0.065);
+    static const double accentTuning[] = {1.0, 0.80, 0.64};
     for (int sound = 0; sound < 3; ++sound) {
         for (int accent = 0; accent < 3; ++accent) {
-            const double tuning = 1.0 - accent * 0.14;
+            const double tuning = accentTuning[accent];
             float peak = 0;
             for (uint32_t i = 0; i < r->toneFrames; ++i) {
                 double t = i / sampleRate;
@@ -231,7 +232,8 @@ static uint32_t trained_tempo(MetronomeRenderer *r) {
 }
 
 static Click click(MetronomeRenderer *r, uint32_t sound, uint32_t accent, uint32_t beat, bool subdivision) {
-    float gain = subdivision ? 0.50f : accent == 0 ? 1.0f : accent == 1 ? 0.88f : 0.75f;
+    static const float accentGains[] = {1.0f, 0.72f, 0.50f};
+    const float gain = subdivision ? 0.34f : accentGains[accent];
     if (sound == 3 && !subdivision) {
         uint32_t count = (uint32_t)atomic_load(&r->voiceCounts[beat]);
         if (count) return (Click){r->voices[beat], count, 0, gain};

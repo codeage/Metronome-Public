@@ -86,6 +86,16 @@ private struct MetronomeView: View {
         var id: Self { self }
     }
 
+    private enum PurchaseOffer {
+        case trial(Product)
+        case standard
+
+        var trialProduct: Product? {
+            if case .trial(let product) = self { return product }
+            return nil
+        }
+    }
+
     @ObservedObject var metronome: Metronome
     let hasAccess: Bool
     let needsPurchase: Bool
@@ -98,8 +108,8 @@ private struct MetronomeView: View {
     @ScaledMetric(relativeTo: .title3) private var playButtonHeight = 62
     @State private var panel: Panel?
     @State private var tapPromptID: UUID?
-    @State private var trialProduct: Product?
-    @State private var hasPresentedPurchaseCard = false
+    @State private var purchaseOffer: PurchaseOffer?
+    @State private var hasEndedPreview = false
     @State private var isPreviewPlaying = false
     @State private var isStartingTrial = false
     @State private var trialMessage: String?
@@ -107,7 +117,11 @@ private struct MetronomeView: View {
     private let portraitControlsWidth: CGFloat = 400
 
     private var canPreviewPlayback: Bool {
-        !hasAccess && !hasPresentedPurchaseCard && panel == nil && scenePhase == .active
+        !hasAccess && !hasEndedPreview && panel == nil && scenePhase == .active
+    }
+
+    private var showsPurchaseCard: Bool {
+        needsPurchase && hasEndedPreview && purchaseOffer != nil
     }
 
     private var trialAnimation: Animation? {
@@ -117,26 +131,37 @@ private struct MetronomeView: View {
     var body: some View {
         layout
         .overlay(alignment: .bottom) {
-            if needsPurchase, hasPresentedPurchaseCard, panel == nil {
-                purchaseCard
+            if showsPurchaseCard, let purchaseOffer {
+                purchaseCard(trialProduct: purchaseOffer.trialProduct)
+                    .allowsHitTesting(panel == nil)
+                    .accessibilityHidden(panel != nil)
                     .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .task(id: needsPurchase && scenePhase == .active) {
-            guard needsPurchase, scenePhase == .active else { return }
+            guard needsPurchase, scenePhase == .active, purchaseOffer == nil else { return }
             let product = await eligibleTrialProduct()
             guard !Task.isCancelled else { return }
-            trialProduct = product
+            resolvePurchaseOffer(product.map(PurchaseOffer.trial) ?? .standard)
+        }
+        .task(id: needsPurchase) {
+            guard needsPurchase, purchaseOffer == nil else { return }
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
+            resolvePurchaseOffer(.standard)
         }
         .task(id: hasAccess) {
-            guard !hasAccess, !hasPresentedPurchaseCard else { return }
+            guard !hasAccess, !hasEndedPreview else { return }
             do {
                 try await Task.sleep(for: .seconds(2))
             } catch {
                 return
             }
             guard !Task.isCancelled, !metronome.subscription.hasAccess else { return }
-            presentPurchaseCard()
+            endPlaybackPreview()
         }
         .task(id: tapPromptID) { [tapPromptID] in
             guard let tapPromptID else { return }
@@ -163,7 +188,7 @@ private struct MetronomeView: View {
             panel = nil
             if allowed {
                 isPreviewPlaying = false
-                trialProduct = nil
+                purchaseOffer = nil
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -191,7 +216,7 @@ private struct MetronomeView: View {
         }
     }
 
-    private var purchaseCard: some View {
+    private func purchaseCard(trialProduct: Product?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(trialProduct == nil ? LocalizedStringKey("解锁全部功能") : LocalizedStringKey("试用节拍器全部功能"))
                 .font(.headline)
@@ -244,13 +269,18 @@ private struct MetronomeView: View {
         return annual
     }
 
-    private func presentPurchaseCard() {
+    private func resolvePurchaseOffer(_ offer: PurchaseOffer) {
+        guard metronome.subscription.needsPurchase, purchaseOffer == nil else { return }
+        withAnimation(trialAnimation) { purchaseOffer = offer }
+    }
+
+    private func endPlaybackPreview() {
         stopPreviewPlayback()
-        withAnimation(trialAnimation) { hasPresentedPurchaseCard = true }
+        withAnimation(trialAnimation) { hasEndedPreview = true }
     }
 
     private func showPurchaseOptions() {
-        presentPurchaseCard()
+        endPlaybackPreview()
         panel = .subscription
     }
 
@@ -268,7 +298,7 @@ private struct MetronomeView: View {
         let product = await eligibleTrialProduct()
         guard metronome.subscription.needsPurchase else { return }
         guard let product, product.displayPrice == price else {
-            trialProduct = product
+            purchaseOffer = product.map(PurchaseOffer.trial) ?? .standard
             showPurchaseOptions()
             return
         }
@@ -552,8 +582,8 @@ private struct MetronomeView: View {
         }
         .buttonStyle(.plain)
         .disabled(!hasAccess && !canPreviewPlayback)
-        .opacity(needsPurchase && hasPresentedPurchaseCard ? 0 : 1)
-        .accessibilityHidden(needsPurchase && hasPresentedPurchaseCard)
+        .opacity(showsPurchaseCard ? 0 : 1)
+        .accessibilityHidden(showsPurchaseCard)
     }
 
     private func togglePlayback() {

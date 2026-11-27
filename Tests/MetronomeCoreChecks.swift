@@ -198,17 +198,25 @@ struct MetronomeCoreChecks {
     }
 
     static func checkLoudness() {
-        for sound in [BeatSound.mechanical, .electronic, .wood] {
+        for sound in BeatSound.allCases {
             withRenderer { renderer in
                 var config = configuration(bpm: 300, beats: 3)
                 config.sound = UInt32(sound.rawValue)
                 config.accents = 0b10_01_00
+                if sound == .voice {
+                    let voice: [Float] = [0.1, 0.2, 0.4, 0.6]
+                    voice.withUnsafeBufferPointer { samples in
+                        for beat in 0..<3 {
+                            precondition(metronome_load_voice(renderer, UInt32(beat), samples.baseAddress, UInt32(samples.count)))
+                        }
+                    }
+                }
                 metronome_configure(renderer, config)
                 let frames = 28_800
                 var left = Array(repeating: Float.zero, count: frames)
                 var right = left
                 metronome_render(renderer, &left, &right, UInt32(frames), 100)
-                let expected: [Float] = [0.98, 0.98 * 0.88, 0.98 * 0.75]
+                let expected: [Float] = [0.98, 0.98 * 0.72, 0.98 * 0.50]
                 for (beat, target) in expected.enumerated() {
                     let start = beat * 9_600
                     let end = start + 9_600
