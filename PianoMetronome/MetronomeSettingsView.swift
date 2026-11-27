@@ -136,10 +136,20 @@ struct MetronomeSettingsView: View {
                 }
                 Section {
                     if purchases.ownsLifetime {
-                        Label("已永久解锁", systemImage: "checkmark")
+                        HStack {
+                            Text("已永久解锁")
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Image(systemName: "checkmark")
+                                .accessibilityHidden(true)
+                        }
                     } else if !purchases.hasAccess {
-                        Button("解锁全部拍号和音色", systemImage: "lock.fill") { showingPurchase = true }
-                            .tint(.primary)
+                        Button {
+                            showingPurchase = true
+                        } label: {
+                            lockedSettingsLabel("解锁全部拍号和音色")
+                        }
+                        .tint(.primary)
                     }
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
@@ -229,10 +239,23 @@ struct MetronomeSettingsView: View {
             if purchases.hasAccess {
                 Toggle("扩展至每小节 32 拍", isOn: metronome.option(\.extendedMeter))
             } else {
-                Button("扩展至每小节 32 拍", systemImage: "lock.fill") { showingPurchase = true }
-                    .tint(.primary)
-                    .accessibilityValue("需要买断")
+                Button {
+                    showingPurchase = true
+                } label: {
+                    lockedSettingsLabel("扩展至每小节 32 拍")
+                }
+                .tint(.primary)
+                .accessibilityValue("需要买断")
             }
+        }
+    }
+
+    private func lockedSettingsLabel(_ title: LocalizedStringKey) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .lineLimit(1)
+            Image(systemName: "lock.fill")
+                .accessibilityHidden(true)
         }
     }
 
