@@ -13,7 +13,7 @@
         00000000000000000000004F /* MetronomeUpdateCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000050; };
         00000000000000000000004D /* CountVoices in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004E; };
         000000000000000000000048 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000049; };
-        000000000000000000000046 /* MetronomeSubscription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000047; };
+        000000000000000000000046 /* MetronomePurchases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000047; };
         000000000000000000000011 /* PianoMetronomeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000021; };
         000000000000000000000012 /* Metronome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000022; };
         000000000000000000000013 /* MetronomeIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000023; };
@@ -69,7 +69,7 @@
         00000000000000000000004A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
         00000000000000000000004B /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
         00000000000000000000004C /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
-        000000000000000000000047 /* MetronomeSubscription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeSubscription.swift; sourceTree = "<group>"; };
+        000000000000000000000047 /* MetronomePurchases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomePurchases.swift; sourceTree = "<group>"; };
         000000000000000000000021 /* PianoMetronomeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoMetronomeApp.swift; sourceTree = "<group>"; };
         000000000000000000000022 /* Metronome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metronome.swift; sourceTree = "<group>"; };
         000000000000000000000023 /* MetronomeIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetronomeIntents.swift; sourceTree = "<group>"; };

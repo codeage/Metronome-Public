@@ -6,7 +6,7 @@ import UIKit
 @MainActor
 struct PianoMetronomeApp: App {
     @StateObject private var metronome = Metronome.shared
-    @StateObject private var subscription = Metronome.shared.subscription
+    @StateObject private var purchases = Metronome.shared.purchases
     @Environment(\.scenePhase) private var scenePhase
     @State private var didCheckForUpdate = false
     @State private var availableUpdate: MetronomeUpdate?
@@ -15,7 +15,7 @@ struct PianoMetronomeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MetronomeView(metronome: metronome, hasAccess: subscription.hasAccess)
+            MetronomeView(metronome: metronome, hasAccess: purchases.hasAccess)
             .onOpenURL { url in
                 Task { await metronome.handle(url) }
             }
@@ -27,10 +27,10 @@ struct PianoMetronomeApp: App {
                 }
             }
             .task(id: scenePhase) {
-                if scenePhase == .active { await subscription.refresh() }
+                if scenePhase == .active { await purchases.refresh() }
             }
             .alert("有新版本", isPresented: Binding(
-                get: { subscription.hasAccess && availableUpdate != nil },
+                get: { purchases.hasAccess && availableUpdate != nil },
                 set: { if !$0 { availableUpdate = nil } }
             ), presenting: availableUpdate) { update in
                 Button(update.destination.buttonTitle) { openUpdate(update.destination) }
@@ -85,7 +85,7 @@ enum MetronomePalette {
 @MainActor
 private struct MetronomeView: View {
     enum Panel: String, Identifiable {
-        case meter, presets, settings, subscription
+        case meter, presets, settings, purchase
         var id: Self { self }
     }
 
@@ -224,7 +224,7 @@ private struct MetronomeView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         case .settings: MetronomeSettingsView(metronome: metronome)
-        case .subscription: MetronomePurchaseSheet(subscription: metronome.subscription)
+        case .purchase: MetronomePurchaseSheet(purchases: metronome.purchases)
         }
     }
 
@@ -275,7 +275,7 @@ private struct MetronomeView: View {
                 options: options, identifier: "meter-option", compactWidth: meterWidth, lockedOptions: locked
             ) { value in
                 if locked.contains(value) {
-                    panel = .subscription
+                    panel = .purchase
                     return
                 }
                 guard let meter = MeterOption(rawValue: value) else {

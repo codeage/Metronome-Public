@@ -19,7 +19,7 @@ enum MetronomeError: LocalizedError {
 @MainActor
 final class Metronome: ObservableObject {
     static let shared = Metronome()
-    let subscription = MetronomeSubscription()
+    let purchases = MetronomePurchases()
 
     @Published private(set) var settings: BeatSettings
     @Published private(set) var preferences: MetronomePreferences
@@ -56,7 +56,7 @@ final class Metronome: ObservableObject {
         initialSettings.bpm = min(preferences.tempoRange.upperBound,
                                   max(preferences.tempoRange.lowerBound, initialSettings.bpm))
         initialSettings.beats = min(preferences.beatsRange.upperBound, initialSettings.beats)
-        if initialSettings.requiresFullAccess && !subscription.hasAccess {
+        if initialSettings.requiresFullAccess && !purchases.hasAccess {
             pendingPremiumSettings = initialSettings
             settings = initialSettings.freeVersion
         } else {
@@ -66,7 +66,7 @@ final class Metronome: ObservableObject {
         presets = (Self.read([MetronomePreset].self, key: "metronomePresets") ?? [])
             .filter { $0.settings.isValid }
 
-        subscription.onAccessChanged = { [weak self] hasAccess in
+        purchases.onAccessChanged = { [weak self] hasAccess in
             self?.updateEntitlement(hasAccess)
         }
         display.tick = { [weak self] time in self?.renderDisplay(at: time) }
@@ -112,7 +112,7 @@ final class Metronome: ObservableObject {
     }
 
     func changePreferences(_ value: MetronomePreferences) throws {
-        if value.extendedMeter && !preferences.extendedMeter && !subscription.hasAccess {
+        if value.extendedMeter && !preferences.extendedMeter && !purchases.hasAccess {
             throw MetronomeError.fullAccessRequired
         }
         var next = value
@@ -173,7 +173,7 @@ final class Metronome: ObservableObject {
     }
 
     func start(_ value: BeatSettings? = nil) throws {
-        if value == nil && !subscription.hasAccess { updateEntitlement(false) }
+        if value == nil && !purchases.hasAccess { updateEntitlement(false) }
         let next = value ?? settings
         try requireAccess(to: next)
         guard valid(next) else { throw MetronomeError.invalidSettings }
@@ -371,7 +371,7 @@ final class Metronome: ObservableObject {
 
     private func recoverAudio() {
         guard playing, let audio, !audio.isRunning else { return }
-        if !subscription.hasAccess { updateEntitlement(false) }
+        if !purchases.hasAccess { updateEntitlement(false) }
         do {
             try audio.start(mixing: preferences.mixWithOthers)
             refreshRoute()
@@ -388,11 +388,11 @@ final class Metronome: ObservableObject {
     }
 
     func refreshAccessIfNeeded(for value: BeatSettings) async {
-        if value.requiresFullAccess && !subscription.hasAccess { await subscription.refresh() }
+        if value.requiresFullAccess && !purchases.hasAccess { await purchases.refresh() }
     }
 
     private func requireAccess(to value: BeatSettings) throws {
-        if value.requiresFullAccess && !subscription.hasAccess { throw MetronomeError.fullAccessRequired }
+        if value.requiresFullAccess && !purchases.hasAccess { throw MetronomeError.fullAccessRequired }
     }
 
     private func updateEntitlement(_ hasAccess: Bool) {
