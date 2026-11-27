@@ -45,6 +45,7 @@ final class MetronomeAudio {
     private let engine = AVAudioEngine()
     private let session = AVAudioSession.sharedInstance()
     private var loadedVoice = false
+    private var previewTask: Task<Void, Never>?
 
     var isRunning: Bool { engine.isRunning }
     var outputLatency: TimeInterval { session.outputLatency }
@@ -82,12 +83,37 @@ final class MetronomeAudio {
     }
 
     func start(mixing: Bool) throws {
-        try session.setCategory(.playback, mode: .default, options: mixing ? [.mixWithOthers] : [])
-        // The route may reject the preferred duration. Its actual latency remains authoritative.
-        try? session.setPreferredIOBufferDuration(0.005)
-        try session.setActive(true)
+        stopPreview()
         metronome_reset(storage.pointer)
+        try startEngine(mixing: mixing)
+    }
+
+    func preview(_ settings: BeatSettings, _ preferences: MetronomePreferences) throws {
+        stopPreview()
+        guard !engine.isRunning, preferences.volume > 0 else { return }
+        configure(settings, preferences)
+        let frames = metronome_prepare_preview(storage.pointer)
+        try startEngine(mixing: preferences.mixWithOthers)
+        let duration = Double(frames) / RenderStorage.sampleRate
+        let drainTime = session.outputLatency + 2 * session.ioBufferDuration + 0.05
+        previewTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration + drainTime))
+            guard !Task.isCancelled else { return }
+            self?.stopPreview()
+        }
+    }
+
+    func stopPreview() {
+        guard previewTask != nil else { return }
+        stop(deactivate: true)
+    }
+
+    private func startEngine(mixing: Bool) throws {
         do {
+            try session.setCategory(.playback, mode: .default, options: mixing ? [.mixWithOthers] : [])
+            // The route may reject the preferred duration. Its actual latency remains authoritative.
+            try? session.setPreferredIOBufferDuration(0.005)
+            try session.setActive(true)
             engine.prepare()
             try engine.start()
         } catch {
@@ -101,6 +127,8 @@ final class MetronomeAudio {
     }
 
     func stop(deactivate: Bool) {
+        previewTask?.cancel()
+        previewTask = nil
         engine.stop()
         metronome_reset(storage.pointer)
         if deactivate { try? session.setActive(false, options: [.notifyOthersOnDeactivation]) }

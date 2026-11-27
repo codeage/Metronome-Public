@@ -4,14 +4,14 @@ import SwiftUI
 import UIKit
 
 enum MetronomeError: LocalizedError {
-    case invalidSettings, audioUnavailable, invalidCommand, subscriptionRequired
+    case invalidSettings, audioUnavailable, invalidCommand, fullAccessRequired
 
     var errorDescription: String? {
         switch self {
         case .invalidSettings: String(localized: "速度或拍号超出当前范围。可以在设置里开启专业速度范围或扩展拍号。")
         case .audioUnavailable: String(localized: "无法启动节拍音频。")
         case .invalidCommand: String(localized: "无法识别节拍器快捷指令的参数。")
-        case .subscriptionRequired: String(localized: "请打开节拍器，订阅、买断或恢复购买后再使用。")
+        case .fullAccessRequired: String(localized: "此功能需要一次性买断。")
         }
     }
 }
@@ -43,6 +43,7 @@ final class Metronome: ObservableObject {
     private var beatSerial: UInt64 = 0
     private var hapticSerial: UInt64 = 0
     private var tapTempo = TapTempo()
+    private var pendingPremiumSettings: BeatSettings?
 
     private init() {
         var initialSettings = Self.read(BeatSettings.self, key: "beatSettings").flatMap { $0.isValid ? $0 : nil } ?? BeatSettings()
@@ -55,18 +56,18 @@ final class Metronome: ObservableObject {
         initialSettings.bpm = min(preferences.tempoRange.upperBound,
                                   max(preferences.tempoRange.lowerBound, initialSettings.bpm))
         initialSettings.beats = min(preferences.beatsRange.upperBound, initialSettings.beats)
-        settings = initialSettings
-        if preferences.migrateVolumeDefault() {
-            Self.write(preferences, key: "metronomePreferences")
+        if initialSettings.requiresFullAccess && !subscription.hasAccess {
+            pendingPremiumSettings = initialSettings
+            settings = initialSettings.freeVersion
+        } else {
+            settings = initialSettings
         }
         self.preferences = preferences
         presets = (Self.read([MetronomePreset].self, key: "metronomePresets") ?? [])
             .filter { $0.settings.isValid }
 
-        subscription.onAccessLost = { [weak self] in
-            guard let self else { return }
-            error = nil
-            stop()
+        subscription.onAccessChanged = { [weak self] hasAccess in
+            self?.updateEntitlement(hasAccess)
         }
         display.tick = { [weak self] time in self?.renderDisplay(at: time) }
         let center = NotificationCenter.default
@@ -94,7 +95,7 @@ final class Metronome: ObservableObject {
     var latencyMilliseconds: Double { outputLatency * 1_000 }
 
     func update(_ value: BeatSettings) throws {
-        try subscription.requireMetronomeUsage()
+        try requireAccess(to: value)
         guard valid(value) else { throw MetronomeError.invalidSettings }
         guard value != settings else { return }
         save(value)
@@ -102,8 +103,18 @@ final class Metronome: ObservableObject {
         syncLiveActivity()
     }
 
+    func selectSound(_ sound: BeatSound) throws {
+        var next = settings
+        next.sound = sound
+        try update(next)
+        guard !playing, let audio else { return }
+        try audio.preview(next, preferences)
+    }
+
     func changePreferences(_ value: MetronomePreferences) throws {
-        try subscription.requireMetronomeUsage()
+        if value.extendedMeter && !preferences.extendedMeter && !subscription.hasAccess {
+            throw MetronomeError.fullAccessRequired
+        }
         var next = value
         let range = next.tempoRange
         next.offsetMilliseconds = min(500, max(-500, next.offsetMilliseconds))
@@ -116,15 +127,27 @@ final class Metronome: ObservableObject {
         next.ghost.audible = min(64, max(1, next.ghost.audible))
         next.ghost.silent = min(64, max(1, next.ghost.silent))
 
+        var compatible = settings
+        compatible.bpm = min(range.upperBound, max(range.lowerBound, compatible.bpm))
+        compatible.beats = min(next.beatsRange.upperBound, compatible.beats)
+        try applyPreferences(next, settings: compatible)
+    }
+
+    func resetSettings() throws {
+        let defaults = BeatSettings()
+        let shouldReplaceStoredSettings = settings == defaults && pendingPremiumSettings != nil
+        try applyPreferences(MetronomePreferences(), settings: defaults)
+        if shouldReplaceStoredSettings { save(defaults) }
+        tapTempo = TapTempo()
+    }
+
+    private func applyPreferences(_ next: MetronomePreferences, settings nextSettings: BeatSettings) throws {
         if playing && preferences.mixWithOthers != next.mixWithOthers {
             try audio?.changeMixing(next.mixWithOthers)
         }
         preferences = next
         Self.write(next, key: "metronomePreferences")
-        var compatible = settings
-        compatible.bpm = min(range.upperBound, max(range.lowerBound, compatible.bpm))
-        compatible.beats = min(preferences.beatsRange.upperBound, compatible.beats)
-        if compatible != settings { save(compatible) }
+        if nextSettings != settings { save(nextSettings) }
         audio?.configure(settings, preferences)
         updateScreenPolicy()
         syncLiveActivity()
@@ -137,7 +160,6 @@ final class Metronome: ObservableObject {
     }
 
     func tap() throws {
-        try subscription.requireMetronomeUsage()
         if let tempo = tapTempo.tap(at: CACurrentMediaTime(), within: preferences.tempoRange) {
             try setTempo(tempo)
         }
@@ -151,8 +173,9 @@ final class Metronome: ObservableObject {
     }
 
     func start(_ value: BeatSettings? = nil) throws {
-        try subscription.requireMetronomeUsage()
+        if value == nil && !subscription.hasAccess { updateEntitlement(false) }
         let next = value ?? settings
+        try requireAccess(to: next)
         guard valid(next) else { throw MetronomeError.invalidSettings }
         if playing {
             try update(next)
@@ -161,17 +184,12 @@ final class Metronome: ObservableObject {
         try startPlayback(next)
     }
 
-    func startPurchasePreview() throws {
-        guard !subscription.hasAccess, !playing else { return }
-        try startPlayback(settings)
-    }
-
     private func startPlayback(_ next: BeatSettings) throws {
         guard let audio else { throw MetronomeError.audioUnavailable }
         audio.configure(next, preferences)
         try audio.start(mixing: preferences.mixWithOthers)
         resumeAfterInterruption = false
-        save(next)
+        if next != settings { save(next) }
         playing = true
         refreshRoute()
         updateScreenPolicy()
@@ -190,6 +208,8 @@ final class Metronome: ObservableObject {
         if foreground {
             if playing { recoverAudio() }
             syncLiveActivity()
+        } else {
+            audio?.stopPreview()
         }
     }
 
@@ -200,31 +220,30 @@ final class Metronome: ObservableObject {
     }
 
     func savePreset(named name: String) {
-        guard subscription.canUseMetronome, let name = Self.cleanedName(name) else { return }
+        guard let name = Self.cleanedName(name) else { return }
         presets.insert(.init(id: UUID(), name: name, settings: settings), at: 0)
         storePresets()
     }
 
     func movePresets(fromOffsets source: IndexSet, toOffset destination: Int) {
-        guard subscription.canUseMetronome else { return }
         presets.move(fromOffsets: source, toOffset: destination)
         storePresets()
     }
 
     func renamePreset(_ id: UUID, to name: String) {
-        guard subscription.canUseMetronome, let name = Self.cleanedName(name),
+        guard let name = Self.cleanedName(name),
               let index = presets.firstIndex(where: { $0.id == id }) else { return }
         presets[index].name = name
         storePresets()
     }
 
     func deletePreset(_ id: UUID) {
-        guard subscription.canUseMetronome else { return }
         presets.removeAll { $0.id == id }
         storePresets()
     }
 
     func loadPreset(_ preset: MetronomePreset) throws {
+        try requireAccess(to: preset.settings)
         var next = preferences
         if !next.tempoRange.contains(preset.settings.bpm) { next.professionalTempo = true }
         if !next.beatsRange.contains(preset.settings.beats) { next.extendedMeter = true }
@@ -237,7 +256,6 @@ final class Metronome: ObservableObject {
             guard url.scheme == "bytereset-metronome", let action = url.host,
                   let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
                   parts.path.isEmpty, parts.fragment == nil else { throw MetronomeError.invalidCommand }
-            try await subscription.verifyAccess()
             let items = parts.queryItems ?? []
             if action == "stop" {
                 guard items.isEmpty else { throw MetronomeError.invalidCommand }
@@ -260,6 +278,7 @@ final class Metronome: ObservableObject {
                 default: throw MetronomeError.invalidCommand
                 }
             }
+            await refreshAccessIfNeeded(for: next)
             if action == "start" { try start(next) } else { try update(next) }
         } catch {
             self.error = error.localizedDescription
@@ -352,10 +371,7 @@ final class Metronome: ObservableObject {
 
     private func recoverAudio() {
         guard playing, let audio, !audio.isRunning else { return }
-        guard subscription.canUseMetronome else {
-            stop()
-            return
-        }
+        if !subscription.hasAccess { updateEntitlement(false) }
         do {
             try audio.start(mixing: preferences.mixWithOthers)
             refreshRoute()
@@ -371,11 +387,33 @@ final class Metronome: ObservableObject {
         audio = MetronomeAudio()
     }
 
+    func refreshAccessIfNeeded(for value: BeatSettings) async {
+        if value.requiresFullAccess && !subscription.hasAccess { await subscription.refresh() }
+    }
+
+    private func requireAccess(to value: BeatSettings) throws {
+        if value.requiresFullAccess && !subscription.hasAccess { throw MetronomeError.fullAccessRequired }
+    }
+
+    private func updateEntitlement(_ hasAccess: Bool) {
+        if hasAccess, let pendingPremiumSettings, valid(pendingPremiumSettings) {
+            save(pendingPremiumSettings)
+        } else if !hasAccess && settings.requiresFullAccess {
+            pendingPremiumSettings = settings
+            settings = settings.freeVersion
+        } else {
+            return
+        }
+        audio?.configure(settings, preferences)
+        syncLiveActivity()
+    }
+
     private func valid(_ value: BeatSettings) -> Bool {
         value.isValid && preferences.tempoRange.contains(value.bpm) && preferences.beatsRange.contains(value.beats)
     }
 
     private func save(_ value: BeatSettings) {
+        pendingPremiumSettings = nil
         settings = value
         Self.write(value, key: "beatSettings")
     }

@@ -1,5 +1,4 @@
 ﻿import AppIntents
-import StoreKit
 import SwiftUI
 import UIKit
 
@@ -16,8 +15,7 @@ struct PianoMetronomeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MetronomeView(metronome: metronome, hasAccess: subscription.hasAccess,
-                          needsPurchase: subscription.needsPurchase)
+            MetronomeView(metronome: metronome, hasAccess: subscription.hasAccess)
             .onOpenURL { url in
                 Task { await metronome.handle(url) }
             }
@@ -65,6 +63,11 @@ enum MeterOption: String, CaseIterable, Sendable, Identifiable {
 
     var id: Self { self }
 
+    static var displayOrder: [Self] {
+        BeatSettings.freeMeters.compactMap(Self.init(rawValue:)) + [.sixEight]
+            + allCases.filter { !BeatSettings.freeMeters.contains($0.rawValue) && $0 != .sixEight }
+    }
+
     func apply(to settings: inout BeatSettings) {
         let values = rawValue.split(separator: "/").compactMap { Int($0) }
         settings.beats = values[0]
@@ -86,21 +89,8 @@ private struct MetronomeView: View {
         var id: Self { self }
     }
 
-    private enum PurchaseOffer {
-        case trial(Product)
-        case standard
-
-        var trialProduct: Product? {
-            if case .trial(let product) = self { return product }
-            return nil
-        }
-    }
-
     @ObservedObject var metronome: Metronome
     let hasAccess: Bool
-    let needsPurchase: Bool
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.purchase) private var purchase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -108,61 +98,11 @@ private struct MetronomeView: View {
     @ScaledMetric(relativeTo: .title3) private var playButtonHeight = 62
     @State private var panel: Panel?
     @State private var tapPromptID: UUID?
-    @State private var purchaseOffer: PurchaseOffer?
-    @State private var hasEndedPreview = false
-    @State private var isPreviewPlaying = false
-    @State private var isStartingTrial = false
-    @State private var trialMessage: String?
 
     private let portraitControlsWidth: CGFloat = 400
 
-    private var canPreviewPlayback: Bool {
-        !hasAccess && !hasEndedPreview && panel == nil && scenePhase == .active
-    }
-
-    private var showsPurchaseCard: Bool {
-        needsPurchase && hasEndedPreview && purchaseOffer != nil
-    }
-
-    private var trialAnimation: Animation? {
-        reduceMotion ? nil : .easeOut(duration: 0.28)
-    }
-
     var body: some View {
         layout
-        .overlay(alignment: .bottom) {
-            if showsPurchaseCard, let purchaseOffer {
-                purchaseCard(trialProduct: purchaseOffer.trialProduct)
-                    .allowsHitTesting(panel == nil)
-                    .accessibilityHidden(panel != nil)
-                    .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .task(id: needsPurchase && scenePhase == .active) {
-            guard needsPurchase, scenePhase == .active, purchaseOffer == nil else { return }
-            let product = await eligibleTrialProduct()
-            guard !Task.isCancelled else { return }
-            resolvePurchaseOffer(product.map(PurchaseOffer.trial) ?? .standard)
-        }
-        .task(id: needsPurchase) {
-            guard needsPurchase, purchaseOffer == nil else { return }
-            do {
-                try await Task.sleep(for: .seconds(5))
-            } catch {
-                return
-            }
-            resolvePurchaseOffer(.standard)
-        }
-        .task(id: hasAccess) {
-            guard !hasAccess, !hasEndedPreview else { return }
-            do {
-                try await Task.sleep(for: .seconds(2))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled, !metronome.subscription.hasAccess else { return }
-            endPlaybackPreview()
-        }
         .task(id: tapPromptID) { [tapPromptID] in
             guard let tapPromptID else { return }
             do {
@@ -177,132 +117,24 @@ private struct MetronomeView: View {
         .focused($keyboardFocused)
         .onAppear { keyboardFocused = true }
         .onKeyPress(.space, phases: .down) { _ in
-            guard panel == nil, hasAccess || canPreviewPlayback else { return .ignored }
+            guard panel == nil else { return .ignored }
             togglePlayback()
             return .handled
         }
         .background(MetronomePalette.background.ignoresSafeArea())
         .tint(MetronomePalette.cyan)
         .preferredColorScheme(.dark)
-        .onChange(of: hasAccess) { _, allowed in
-            panel = nil
-            if allowed {
-                isPreviewPlaying = false
-                purchaseOffer = nil
-            }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { stopPreviewPlayback() }
-        }
-        .onDisappear { stopPreviewPlayback() }
         .sheet(item: $panel, onDismiss: { keyboardFocused = true }) { panel in
             panelView(panel)
         }
         .alert("节拍器", isPresented: Binding(
-            get: { (hasAccess || canPreviewPlayback) && metronome.error != nil },
+            get: { metronome.error != nil },
             set: { if !$0 { metronome.error = nil } }
         )) {
             Button("好", role: .cancel) { metronome.error = nil }
         } message: {
             Text(metronome.error ?? "")
         }
-        .alert("App Store", isPresented: Binding(
-            get: { trialMessage != nil },
-            set: { if !$0 { trialMessage = nil } }
-        )) {
-            Button("好", role: .cancel) { trialMessage = nil }
-        } message: {
-            Text(trialMessage ?? "")
-        }
-    }
-
-    private func purchaseCard(trialProduct: Product?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(trialProduct == nil ? LocalizedStringKey("解锁全部功能") : LocalizedStringKey("试用节拍器全部功能"))
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-
-            if let product = trialProduct {
-                Text("免费试用 7 天，之后以 \(product.displayPrice)/年自动续订。如不想续订，请在试用结束至少 24 小时前取消。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button {
-                    Task { await startTrial(at: product.displayPrice) }
-                } label: {
-                    Text("开始 7 天免费试用")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(MetronomePalette.background)
-                        .background(MetronomePalette.cyan, in: RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Button(action: showPurchaseOptions) {
-                Text(trialProduct == nil ? LocalizedStringKey("查看购买方案") : LocalizedStringKey("其他购买方式"))
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .foregroundStyle(MetronomePalette.cyan)
-            }
-            .buttonStyle(.plain)
-        }
-        .disabled(isStartingTrial)
-        .padding(16)
-        .frame(maxWidth: 480)
-        .background(MetronomePalette.surface, in: RoundedRectangle(cornerRadius: 22))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(MetronomePalette.track, lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
-    }
-
-    private func eligibleTrialProduct() async -> Product? {
-        guard let products = try? await Product.products(for: [MetronomeSubscription.annualProductID]),
-              let annual = MetronomeSubscription.annualProduct(in: products),
-              await MetronomeSubscription.offersSevenDayTrial(annual) else { return nil }
-        return annual
-    }
-
-    private func resolvePurchaseOffer(_ offer: PurchaseOffer) {
-        guard metronome.subscription.needsPurchase, purchaseOffer == nil else { return }
-        withAnimation(trialAnimation) { purchaseOffer = offer }
-    }
-
-    private func endPlaybackPreview() {
-        stopPreviewPlayback()
-        withAnimation(trialAnimation) { hasEndedPreview = true }
-    }
-
-    private func showPurchaseOptions() {
-        endPlaybackPreview()
-        panel = .subscription
-    }
-
-    private func stopPreviewPlayback() {
-        guard isPreviewPlaying else { return }
-        isPreviewPlaying = false
-        if !metronome.subscription.hasAccess { metronome.stop() }
-    }
-
-    private func startTrial(at price: String) async {
-        guard !isStartingTrial, metronome.subscription.needsPurchase else { return }
-        isStartingTrial = true
-        defer { isStartingTrial = false }
-
-        let product = await eligibleTrialProduct()
-        guard metronome.subscription.needsPurchase else { return }
-        guard let product, product.displayPrice == price else {
-            purchaseOffer = product.map(PurchaseOffer.trial) ?? .standard
-            showPurchaseOptions()
-            return
-        }
-        trialMessage = await metronome.subscription.purchaseMessage(for: product, using: purchase)
     }
 
     private var layout: some View {
@@ -392,15 +224,7 @@ private struct MetronomeView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         case .settings: MetronomeSettingsView(metronome: metronome)
-        case .subscription:
-            NavigationStack {
-                MetronomeSubscriptionView(subscription: metronome.subscription)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("完成") { self.panel = nil }
-                        }
-                    }
-            }
+        case .subscription: MetronomePurchaseSheet(subscription: metronome.subscription)
         }
     }
 
@@ -419,16 +243,11 @@ private struct MetronomeView: View {
             .modifier(SettingsButtonBackground(capsule: true))
             .accessibilityLabel("曲目预设")
             .accessibilityIdentifier("presets-button")
-            .disabled(!hasAccess)
 
             Spacer()
 
             Button {
-                if hasAccess {
-                    panel = .settings
-                } else {
-                    showPurchaseOptions()
-                }
+                panel = .settings
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))
@@ -437,8 +256,7 @@ private struct MetronomeView: View {
             }
             .buttonStyle(.plain)
             .modifier(SettingsButtonBackground())
-            .accessibilityLabel(hasAccess ? LocalizedStringKey("设置") : LocalizedStringKey("查看购买方案"))
-            .disabled(isStartingTrial || (!hasAccess && !needsPurchase))
+            .accessibilityLabel("设置")
         }
         .foregroundStyle(.primary)
     }
@@ -448,12 +266,18 @@ private struct MetronomeView: View {
         let availableWidth = max(0, width - spacing)
         let meterWidth = min(120, availableWidth * 0.38)
         let rhythmWidth = availableWidth - meterWidth
+        let custom = String(localized: "自定义拍号")
+        let options = MeterOption.displayOrder.map(\.rawValue) + [custom]
+        let locked = hasAccess ? Set<String>() : Set(options.filter { !BeatSettings.freeMeters.contains($0) })
         return HStack(spacing: spacing) {
             StableOptionMenu(
                 title: String(localized: "拍号"), selection: metronome.settings.meter,
-                options: MeterOption.allCases.map(\.rawValue) + [String(localized: "自定义拍号")],
-                identifier: "meter-option", compactWidth: meterWidth
+                options: options, identifier: "meter-option", compactWidth: meterWidth, lockedOptions: locked
             ) { value in
+                if locked.contains(value) {
+                    panel = .subscription
+                    return
+                }
                 guard let meter = MeterOption(rawValue: value) else {
                     panel = .meter
                     return
@@ -475,7 +299,6 @@ private struct MetronomeView: View {
             }
             .frame(width: rhythmWidth, height: 44)
         }
-        .disabled(!hasAccess)
     }
 
     private func tempo(diameter: CGFloat, width: CGFloat, controlGap: CGFloat,
@@ -489,9 +312,8 @@ private struct MetronomeView: View {
                       mark: metronome.preferences.showTempoMark ? BeatSettings(bpm: displayed).tempoMark : nil,
                       flashTick: metronome.preferences.flash && !reduceMotion ? metronome.flashTick : nil,
                       setTempo: { bpm in
-                          if hasAccess { metronome.performTempo(bpm) }
+                          metronome.performTempo(bpm)
                       })
-                .allowsHitTesting(hasAccess)
             HStack(spacing: 12) {
                 tempoButton(-1, symbol: "minus", label: "减慢一拍每分钟")
                 Button {
@@ -522,7 +344,6 @@ private struct MetronomeView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .disabled(!hasAccess)
     }
 
     private func accentGrid(_ layout: AccentGridLayout) -> some View {
@@ -538,7 +359,6 @@ private struct MetronomeView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: layout.height)
-        .disabled(!hasAccess)
     }
 
     private func accentButton(_ beat: Int, layout: AccentGridLayout) -> some View {
@@ -581,23 +401,13 @@ private struct MetronomeView: View {
                 .background(MetronomePalette.cyan, in: RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
-        .disabled(!hasAccess && !canPreviewPlayback)
-        .opacity(showsPurchaseCard ? 0 : 1)
-        .accessibilityHidden(showsPurchaseCard)
     }
 
     private func togglePlayback() {
-        guard hasAccess || canPreviewPlayback else { return }
         if metronome.playing {
-            isPreviewPlaying = false
             metronome.stop()
-        } else if hasAccess {
-            metronome.perform { try metronome.start() }
         } else {
-            metronome.perform {
-                try metronome.startPurchasePreview()
-                isPreviewPlaying = metronome.playing
-            }
+            metronome.perform { try metronome.start() }
         }
     }
 

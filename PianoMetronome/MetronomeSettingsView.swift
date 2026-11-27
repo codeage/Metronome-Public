@@ -36,45 +36,66 @@ extension Metronome {
 @MainActor
 struct MeterEditor: View {
     @ObservedObject var metronome: Metronome
+    @ObservedObject private var subscription: MetronomeSubscription
     @Environment(\.dismiss) private var dismiss
+    @State private var showingPurchase = false
+
+    init(metronome: Metronome) {
+        self.metronome = metronome
+        self.subscription = metronome.subscription
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("常用拍号") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 70), spacing: 8)], spacing: 8) {
-                        ForEach(MeterOption.allCases) { meter in
+                        ForEach(MeterOption.displayOrder) { meter in
                             let selected = metronome.settings.meter == meter.rawValue
+                            let locked = !subscription.hasAccess && !BeatSettings.freeMeters.contains(meter.rawValue)
                             Button {
+                                if locked {
+                                    showingPurchase = true
+                                    return
+                                }
                                 var settings = metronome.settings
                                 meter.apply(to: &settings)
                                 metronome.perform { try metronome.update(settings) }
                                 dismiss()
                             } label: {
-                                Text(meter.rawValue)
-                                    .font(.headline.monospacedDigit())
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(selected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12),
-                                                in: RoundedRectangle(cornerRadius: 9))
+                                HStack(spacing: 4) {
+                                    Text(meter.rawValue)
+                                    if locked { Image(systemName: "lock.fill").font(.caption) }
+                                }
+                                .font(.headline.monospacedDigit())
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(selected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12),
+                                            in: RoundedRectangle(cornerRadius: 9))
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(selected ? .isSelected : [])
+                            .accessibilityValue(locked ? LocalizedStringKey("需要买断") : LocalizedStringKey(""))
                         }
                     }
                     .padding(.vertical, 6)
                 }
                 Section("自定义拍号") {
-                    Stepper("每小节 \(metronome.settings.beats) 拍",
-                            value: metronome.setting(\.beats), in: metronome.preferences.beatsRange)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("拍号分母")
-                        Picker("拍号分母", selection: metronome.setting(\.unit)) {
-                            ForEach(BeatSettings.units, id: \.self) { Text("\($0)").tag($0) }
+                    if subscription.hasAccess {
+                        Stepper("每小节 \(metronome.settings.beats) 拍",
+                                value: metronome.setting(\.beats), in: metronome.preferences.beatsRange)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("拍号分母")
+                            Picker("拍号分母", selection: metronome.setting(\.unit)) {
+                                ForEach(BeatSettings.units, id: \.self) { Text("\($0)").tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityLabel("拍号分母")
                         }
-                        .pickerStyle(.segmented)
-                        .accessibilityLabel("拍号分母")
+                        .padding(.vertical, 4)
+                    } else {
+                        Button("自定义拍号", systemImage: "lock.fill") { showingPurchase = true }
+                            .accessibilityValue("需要买断")
                     }
-                    .padding(.vertical, 4)
                 }
             }
             .navigationTitle("拍号")
@@ -82,6 +103,9 @@ struct MeterEditor: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
             }
+        }
+        .sheet(isPresented: $showingPurchase) {
+            MetronomePurchaseSheet(subscription: subscription)
         }
     }
 }
@@ -92,6 +116,8 @@ struct MetronomeSettingsView: View {
     @ObservedObject private var subscription: MetronomeSubscription
     @Environment(\.dismiss) private var dismiss
     @State private var showingSubscriptionManagement = false
+    @State private var confirmingSettingsReset = false
+    @State private var showingPurchase = false
 
     init(metronome: Metronome) {
         self.metronome = metronome
@@ -102,11 +128,11 @@ struct MetronomeSettingsView: View {
         NavigationStack {
             Form {
                 audioSection
+                feedbackSection
                 latencySection
                 rangeSection
                 trainingSection
                 ghostSection
-                feedbackSection
                 Section {
                     NavigationLink("曲目预设") { MetronomePresetsView(metronome: metronome) }
                 }
@@ -114,9 +140,7 @@ struct MetronomeSettingsView: View {
                     if subscription.ownsLifetime {
                         Label("已永久解锁", systemImage: "checkmark")
                     } else {
-                        NavigationLink("一次性买断") {
-                            MetronomeSubscriptionView(subscription: subscription, buyoutOnly: true)
-                        }
+                        Button("解锁全部拍号和音色", systemImage: "lock.fill") { showingPurchase = true }
                     }
                     Button {
                         showingSubscriptionManagement = true
@@ -135,6 +159,14 @@ struct MetronomeSettingsView: View {
                     .buttonStyle(.plain)
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
+                Section {
+                    Button {
+                        confirmingSettingsReset = true
+                    } label: {
+                        Text("恢复默认设置")
+                            .foregroundStyle(.primary)
+                    }
+                }
                 Section("关于") {
                     if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
                         LabeledContent("版本", value: version)
@@ -150,6 +182,17 @@ struct MetronomeSettingsView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
             }
         }
+        .alert("恢复默认设置？", isPresented: $confirmingSettingsReset) {
+            Button("取消", role: .cancel) {}
+            Button("重置", role: .destructive) {
+                metronome.perform { try metronome.resetSettings() }
+            }
+        } message: {
+            Text("所有节拍器设置都将恢复默认值。已保存的曲目预设会保留。")
+        }
+        .sheet(isPresented: $showingPurchase) {
+            MetronomePurchaseSheet(subscription: subscription)
+        }
         .manageSubscriptionsSheet(isPresented: $showingSubscriptionManagement)
         .onChange(of: showingSubscriptionManagement) { _, isShowing in
             if !isShowing { Task { await metronome.subscription.refresh() } }
@@ -159,7 +202,8 @@ struct MetronomeSettingsView: View {
     private var audioSection: some View {
         Section("音频") {
             LabeledContent("音色") {
-                BeatSoundMenu(metronome: metronome, identifier: "settings-sound-option")
+                BeatSoundMenu(metronome: metronome, hasAccess: subscription.hasAccess,
+                              identifier: "settings-sound-option") { showingPurchase = true }
                     .frame(width: 118, height: 44)
             }
             VStack(alignment: .leading) {
@@ -199,7 +243,12 @@ struct MetronomeSettingsView: View {
         Section("速度与拍号") {
             Toggle("专业速度范围（20–300）", isOn: metronome.option(\.professionalTempo))
             Toggle("显示意大利语速度标记", isOn: metronome.option(\.showTempoMark))
-            Toggle("扩展至每小节 32 拍", isOn: metronome.option(\.extendedMeter))
+            if subscription.hasAccess {
+                Toggle("扩展至每小节 32 拍", isOn: metronome.option(\.extendedMeter))
+            } else {
+                Button("扩展至每小节 32 拍", systemImage: "lock.fill") { showingPurchase = true }
+                    .accessibilityValue("需要买断")
+            }
         }
     }
 
@@ -242,13 +291,22 @@ struct MetronomeSettingsView: View {
 @MainActor
 struct BeatSoundMenu: View {
     @ObservedObject var metronome: Metronome
+    let hasAccess: Bool
     let identifier: String
+    let showPurchase: () -> Void
+
+    private static let displayOrder: [BeatSound] = [
+        .mechanical, .wood, .electronic, .voice, .bell, .softTap, .shortDrum
+    ]
 
     var body: some View {
+        let locked = hasAccess ? Set<String>() : Set(Self.displayOrder.filter { $0 != .mechanical }.map(\.title))
         StableOptionMenu(title: String(localized: "音色"), selection: metronome.settings.sound.title,
-                         options: BeatSound.allCases.map(\.title), identifier: identifier) { value in
-            if let sound = BeatSound.allCases.first(where: { $0.title == value }) {
-                metronome.setting(\.sound).wrappedValue = sound
+                         options: Self.displayOrder.map(\.title), identifier: identifier, lockedOptions: locked) { value in
+            if locked.contains(value) {
+                showPurchase()
+            } else if let sound = Self.displayOrder.first(where: { $0.title == value }) {
+                metronome.perform { try metronome.selectSound(sound) }
             }
         }
     }
@@ -261,12 +319,14 @@ struct StableOptionMenu: UIViewRepresentable {
     let options: [String]
     let identifier: String
     var compactWidth: CGFloat?
+    var lockedOptions: Set<String> = []
     let select: (String) -> Void
 
     @MainActor
     final class Coordinator {
         var selection: String?
         var options: [String] = []
+        var lockedOptions: Set<String> = []
         var accessibilityTitle: String?
         var contentSizeCategory: UIContentSizeCategory?
         var compactWidth: CGFloat?
@@ -297,11 +357,13 @@ struct StableOptionMenu: UIViewRepresentable {
         coordinator.select = button.isEnabled ? select : nil
         let category = button.traitCollection.preferredContentSizeCategory
         let menuChanged = coordinator.selection != selection || coordinator.options != options
+            || coordinator.lockedOptions != lockedOptions
         // Playback can redraw the parent on every beat. Keep the open menu and its selection intact.
         guard menuChanged || coordinator.accessibilityTitle != title || coordinator.contentSizeCategory != category
                 || coordinator.compactWidth != compactWidth else { return }
         coordinator.selection = selection
         coordinator.options = options
+        coordinator.lockedOptions = lockedOptions
         coordinator.accessibilityTitle = title
         coordinator.contentSizeCategory = category
         coordinator.compactWidth = compactWidth
@@ -339,7 +401,11 @@ struct StableOptionMenu: UIViewRepresentable {
         button.accessibilityValue = selection
         if menuChanged {
             button.menu = UIMenu(children: options.map { option in
-                UIAction(title: option, state: option == selection ? .on : .off) { [weak coordinator] _ in
+                let locked = lockedOptions.contains(option)
+                return UIAction(title: option,
+                                subtitle: locked ? String(localized: "需要买断") : nil,
+                                image: locked ? UIImage(systemName: "lock.fill") : nil,
+                                state: option == selection ? .on : .off) { [weak coordinator] _ in
                     coordinator?.select?(option)
                 }
             })
@@ -350,13 +416,21 @@ struct StableOptionMenu: UIViewRepresentable {
 @MainActor
 struct MetronomePresetsView: View {
     @ObservedObject var metronome: Metronome
-    var showsCloseButton = false
+    @ObservedObject private var subscription: MetronomeSubscription
+    let showsCloseButton: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var editMode: EditMode = .inactive
     @State private var editing: UUID?
     @State private var pendingDeletion: MetronomePreset?
     @State private var name = ""
     @State private var naming = false
+    @State private var showingPurchase = false
+
+    init(metronome: Metronome, showsCloseButton: Bool = false) {
+        self.metronome = metronome
+        self.subscription = metronome.subscription
+        self.showsCloseButton = showsCloseButton
+    }
 
     var body: some View {
         List {
@@ -365,8 +439,13 @@ struct MetronomePresetsView: View {
                     .disabled(editMode.isEditing)
             }
             ForEach(metronome.presets) { preset in
+                let locked = !subscription.hasAccess && preset.settings.requiresFullAccess
                 Button {
                     guard !editMode.isEditing else { return }
+                    if locked {
+                        showingPurchase = true
+                        return
+                    }
                     do {
                         try metronome.loadPreset(preset)
                         dismiss()
@@ -375,12 +454,17 @@ struct MetronomePresetsView: View {
                     }
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(preset.name)
+                        if locked {
+                            Label(preset.name, systemImage: "lock.fill")
+                        } else {
+                            Text(preset.name)
+                        }
                         Text("\(preset.settings.bpm) · \(preset.settings.meter) · \(preset.settings.rhythm.title)")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
+                .accessibilityValue(locked ? LocalizedStringKey("需要买断") : LocalizedStringKey(""))
                 .swipeActions(allowsFullSwipe: false) {
                     Button("删除", systemImage: "trash", role: .destructive) { pendingDeletion = preset }
                     Button("重命名", systemImage: "pencil") { edit(preset) }
@@ -407,6 +491,9 @@ struct MetronomePresetsView: View {
             }
         }
         .environment(\.editMode, $editMode)
+        .sheet(isPresented: $showingPurchase) {
+            MetronomePurchaseSheet(subscription: subscription)
+        }
         .alert(editing == nil ? LocalizedStringKey("保存曲目") : LocalizedStringKey("重命名曲目"), isPresented: $naming) {
             TextField("曲目名称", text: $name)
             Button("取消", role: .cancel) {}

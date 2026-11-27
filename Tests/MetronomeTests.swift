@@ -2,6 +2,7 @@
 
 final class MetronomeTests: XCTestCase {
     func testLegacySettingsAndPresetRoundTrip() throws { try MetronomeCoreChecks.checkSettingsMigration() }
+    func testFreeTier() { MetronomeCoreChecks.checkFreeTier() }
     func testTapTempo() { MetronomeCoreChecks.checkTapTempo() }
     func testTempoDialDrag() { MetronomeCoreChecks.checkTempoDialDrag() }
     func testFractionalSampleTiming() { MetronomeCoreChecks.checkRenderTiming() }

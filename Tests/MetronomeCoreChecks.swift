@@ -9,6 +9,7 @@ struct MetronomeCoreChecks {
     #if !XCODE_UNIT_TESTS
     static func main() throws {
         try checkSettingsMigration()
+        checkFreeTier()
         checkTapTempo()
         checkTempoDialDrag()
         checkRenderTiming()
@@ -58,6 +59,30 @@ struct MetronomeCoreChecks {
         }
     }
 
+    static func checkFreeTier() {
+        precondition(BeatSettings.freeMeters == ["4/4", "3/4", "2/4"])
+        for beats in [2, 3, 4] {
+            for sound in BeatSound.allCases {
+                var settings = BeatSettings(bpm: 95, beats: beats, accent: false)
+                settings.sound = sound
+                precondition(settings.requiresFullAccess == (sound != .mechanical))
+                var expected = settings
+                expected.sound = .mechanical
+                precondition(settings.freeVersion == expected)
+            }
+        }
+
+        for beats in 1...32 {
+            for unit in BeatSettings.units where unit != 4 || !(2...4).contains(beats) {
+                let settings = BeatSettings(bpm: 95, beats: beats, unit: unit, subdivision: 3)
+                let fallback = settings.freeVersion
+                precondition(settings.requiresFullAccess && !fallback.requiresFullAccess)
+                precondition(fallback.meter == "4/4" && fallback.accents == [.strong, .weak, .weak, .weak])
+                precondition(fallback.bpm == settings.bpm && fallback.rhythm == settings.rhythm)
+            }
+        }
+    }
+
     static func checkSettingsMigration() throws {
         precondition(BeatSettings(beats: 17, unit: 32).isValid)
         precondition(BeatSettings(beats: 32, unit: 64).isValid)
@@ -74,19 +99,16 @@ struct MetronomeCoreChecks {
         let decoded = try JSONDecoder().decode(MetronomePreset.self, from: encoded)
         precondition(decoded == preset)
         let currentPreferences = MetronomePreferences()
-        precondition(currentPreferences.volume == 1)
+        precondition(currentPreferences.volume == 1 && currentPreferences.flash)
         let data = try JSONEncoder().encode(currentPreferences)
         guard var fields = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             preconditionFailure("Expected preference fields")
         }
-        fields.removeValue(forKey: "volumeProfileVersion")
         for oldLevel in [0.8, 0.25, 0.0] {
             fields["volume"] = oldLevel
             let oldData = try JSONSerialization.data(withJSONObject: fields)
-            var migrated = try JSONDecoder().decode(MetronomePreferences.self, from: oldData)
-            precondition(migrated.migrateVolumeDefault())
-            precondition(migrated.volume == (oldLevel == 0.8 ? 1 : oldLevel))
-            precondition(!migrated.migrateVolumeDefault())
+            let migrated = try JSONDecoder().decode(MetronomePreferences.self, from: oldData)
+            precondition(migrated.volume == oldLevel)
         }
         precondition(BeatSettings(subdivision: .min).rhythm == .quarter)
         precondition(BeatSettings().bpm == 120 && BeatSettings().meter == "4/4")
@@ -216,7 +238,7 @@ struct MetronomeCoreChecks {
                 var left = Array(repeating: Float.zero, count: frames)
                 var right = left
                 metronome_render(renderer, &left, &right, UInt32(frames), 100)
-                let expected: [Float] = [0.98, 0.98 * 0.72, 0.98 * 0.50]
+                let expected: [Float] = [0.98, 0.98 * 0.88, 0.98 * 0.75]
                 for (beat, target) in expected.enumerated() {
                     let start = beat * 9_600
                     let end = start + 9_600

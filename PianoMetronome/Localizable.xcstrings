@@ -1,6 +1,118 @@
 ﻿{
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "需要买断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requires unlock"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要買斷"
+          }
+        }
+      }
+    },
+    "此功能需要一次性买断。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This feature requires a one-time purchase."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此功能需要一次性買斷。"
+          }
+        }
+      }
+    },
+    "解锁全部拍号和音色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock All Time Signatures and Sounds"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解鎖所有拍號和音色"
+          }
+        }
+      }
+    },
+    "恢复默认设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to Defaults"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復預設設定"
+          }
+        }
+      }
+    },
+    "恢复默认设置？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to Defaults?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復預設設定？"
+          }
+        }
+      }
+    },
+    "重置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重設"
+          }
+        }
+      }
+    },
+    "所有节拍器设置都将恢复默认值。已保存的曲目预设会保留。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All metronome settings will return to their defaults. Your saved presets will be kept."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有節拍器設定都會恢復預設值。已儲存的曲目預設會保留。"
+          }
+        }
+      }
+    },
     "关于": {
       "localizations": {
         "en": {
@@ -429,6 +541,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "回饋與螢幕"
+          }
+        }
+      }
+    },
+    "铃声": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bell"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鈴聲"
+          }
+        }
+      }
+    },
+    "轻点声": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soft Tap"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輕點聲"
+          }
+        }
+      }
+    },
+    "短鼓声": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Short Drum"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短鼓聲"
           }
         }
       }

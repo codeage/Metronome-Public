@@ -9,7 +9,6 @@ struct StartMetronomeIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        try await Metronome.shared.subscription.verifyAccess()
         try Metronome.shared.start()
         return .result()
     }
@@ -21,7 +20,6 @@ struct StopMetronomeIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        try await Metronome.shared.subscription.verifyAccess()
         Metronome.shared.stop()
         return .result()
     }
@@ -49,8 +47,8 @@ struct SetMetronomeIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        try await Metronome.shared.subscription.verifyAccess()
         let settings = BeatSettings(bpm: bpm, beats: beats, unit: unit, subdivision: subdivision, accent: accent)
+        await Metronome.shared.refreshAccessIfNeeded(for: settings)
         if play {
             try Metronome.shared.start(settings)
         } else {
@@ -117,7 +115,6 @@ struct SetSpokenMetronomeTempoIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        try await Metronome.shared.subscription.verifyAccess()
         try Metronome.shared.setTempo(tempo.id)
         return .result(dialog: "速度已设为每分钟 \(tempo.id) 拍。")
     }
@@ -135,9 +132,9 @@ struct SetMetronomeMeterIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        try await Metronome.shared.subscription.verifyAccess()
         var settings = Metronome.shared.settings
         meter.apply(to: &settings)
+        await Metronome.shared.refreshAccessIfNeeded(for: settings)
         try Metronome.shared.update(settings)
         return .result(dialog: "拍号已设为 \(meter.rawValue)。")
     }
