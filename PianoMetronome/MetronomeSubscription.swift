@@ -36,7 +36,7 @@ final class MetronomeSubscription: ObservableObject {
         }
     }
 
-    var canUseMetronome: Bool { access == .checking || hasAccess }
+    var canUseMetronome: Bool { hasAccess }
     var needsPurchase: Bool { access == .locked && !hasAccess }
     var ownsLifetime: Bool { access == .lifetime }
 
@@ -158,7 +158,7 @@ final class MetronomeSubscription: ObservableObject {
         expirationTask = nil
         guard let latestExpiration, latestExpiration > .now else {
             if access != .locked {
-                if !testingSession { onAccessLost?() }
+                if access != .checking && !testingSession { onAccessLost?() }
                 access = .locked
             }
             return

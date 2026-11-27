@@ -162,7 +162,7 @@ final class Metronome: ObservableObject {
     }
 
     func startPurchasePreview() throws {
-        guard subscription.needsPurchase, !playing else { return }
+        guard !subscription.hasAccess, !playing else { return }
         try startPlayback(settings)
     }
 

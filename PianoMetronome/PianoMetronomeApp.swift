@@ -107,7 +107,7 @@ private struct MetronomeView: View {
     private let portraitControlsWidth: CGFloat = 400
 
     private var canPreviewPlayback: Bool {
-        needsPurchase && !hasPresentedPurchaseCard && panel == nil && scenePhase == .active
+        !hasAccess && !hasPresentedPurchaseCard && panel == nil && scenePhase == .active
     }
 
     private var trialAnimation: Animation? {
@@ -128,14 +128,14 @@ private struct MetronomeView: View {
             guard !Task.isCancelled else { return }
             trialProduct = product
         }
-        .task(id: needsPurchase) {
-            guard needsPurchase, !hasPresentedPurchaseCard else { return }
+        .task(id: hasAccess) {
+            guard !hasAccess, !hasPresentedPurchaseCard else { return }
             do {
                 try await Task.sleep(for: .seconds(2))
             } catch {
                 return
             }
-            guard !Task.isCancelled, metronome.subscription.needsPurchase else { return }
+            guard !Task.isCancelled, !metronome.subscription.hasAccess else { return }
             presentPurchaseCard()
         }
         .task(id: tapPromptID) { [tapPromptID] in
@@ -542,14 +542,8 @@ private struct MetronomeView: View {
 
     private var playButton: some View {
         Button(action: togglePlayback) {
-            Group {
-                if hasAccess || needsPurchase {
-                    Label(metronome.playing ? LocalizedStringKey("停止") : LocalizedStringKey("开始"),
-                          systemImage: metronome.playing ? "stop.fill" : "play.fill")
-                } else {
-                    Text("正在检查订阅…")
-                }
-            }
+            Label(metronome.playing ? LocalizedStringKey("停止") : LocalizedStringKey("开始"),
+                  systemImage: metronome.playing ? "stop.fill" : "play.fill")
                 .font(.title2.weight(.semibold))
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, minHeight: playButtonHeight)
