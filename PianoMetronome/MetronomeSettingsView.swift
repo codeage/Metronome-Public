@@ -92,6 +92,7 @@ struct MetronomeSettingsView: View {
     @ObservedObject private var subscription: MetronomeSubscription
     @Environment(\.dismiss) private var dismiss
     @State private var showingSubscriptionManagement = false
+    @State private var confirmingSettingsReset = false
 
     init(metronome: Metronome) {
         self.metronome = metronome
@@ -135,6 +136,9 @@ struct MetronomeSettingsView: View {
                     .buttonStyle(.plain)
                     NavigationLink("隐私政策") { MetronomePrivacyPolicyView() }
                 }
+                Section {
+                    Button("恢复默认设置") { confirmingSettingsReset = true }
+                }
                 Section("关于") {
                     if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
                         LabeledContent("版本", value: version)
@@ -149,6 +153,14 @@ struct MetronomeSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
             }
+        }
+        .alert("恢复默认设置？", isPresented: $confirmingSettingsReset) {
+            Button("取消", role: .cancel) {}
+            Button("重置", role: .destructive) {
+                metronome.perform { try metronome.resetSettings() }
+            }
+        } message: {
+            Text("所有节拍器设置都将恢复默认值。已保存的曲目预设会保留。")
         }
         .manageSubscriptionsSheet(isPresented: $showingSubscriptionManagement)
         .onChange(of: showingSubscriptionManagement) { _, isShowing in

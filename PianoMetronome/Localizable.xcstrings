@@ -1,6 +1,70 @@
 ﻿{
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "恢复默认设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to Defaults"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復預設設定"
+          }
+        }
+      }
+    },
+    "恢复默认设置？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to Defaults?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復預設設定？"
+          }
+        }
+      }
+    },
+    "重置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重設"
+          }
+        }
+      }
+    },
+    "所有节拍器设置都将恢复默认值。已保存的曲目预设会保留。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All metronome settings will return to their defaults. Your saved presets will be kept."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有節拍器設定都會恢復預設值。已儲存的曲目預設會保留。"
+          }
+        }
+      }
+    },
     "关于": {
       "localizations": {
         "en": {

@@ -121,15 +121,25 @@ final class Metronome: ObservableObject {
         next.ghost.audible = min(64, max(1, next.ghost.audible))
         next.ghost.silent = min(64, max(1, next.ghost.silent))
 
+        var compatible = settings
+        compatible.bpm = min(range.upperBound, max(range.lowerBound, compatible.bpm))
+        compatible.beats = min(next.beatsRange.upperBound, compatible.beats)
+        try applyPreferences(next, settings: compatible)
+    }
+
+    func resetSettings() throws {
+        try subscription.requireMetronomeUsage()
+        try applyPreferences(MetronomePreferences(), settings: BeatSettings())
+        tapTempo = TapTempo()
+    }
+
+    private func applyPreferences(_ next: MetronomePreferences, settings nextSettings: BeatSettings) throws {
         if playing && preferences.mixWithOthers != next.mixWithOthers {
             try audio?.changeMixing(next.mixWithOthers)
         }
         preferences = next
         Self.write(next, key: "metronomePreferences")
-        var compatible = settings
-        compatible.bpm = min(range.upperBound, max(range.lowerBound, compatible.bpm))
-        compatible.beats = min(preferences.beatsRange.upperBound, compatible.beats)
-        if compatible != settings { save(compatible) }
+        if nextSettings != settings { save(nextSettings) }
         audio?.configure(settings, preferences)
         updateScreenPolicy()
         syncLiveActivity()
