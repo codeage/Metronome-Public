@@ -56,9 +56,6 @@ final class Metronome: ObservableObject {
                                   max(preferences.tempoRange.lowerBound, initialSettings.bpm))
         initialSettings.beats = min(preferences.beatsRange.upperBound, initialSettings.beats)
         settings = initialSettings
-        if preferences.migrateVolumeDefault() {
-            Self.write(preferences, key: "metronomePreferences")
-        }
         self.preferences = preferences
         presets = (Self.read([MetronomePreset].self, key: "metronomePresets") ?? [])
             .filter { $0.settings.isValid }
@@ -102,6 +99,14 @@ final class Metronome: ObservableObject {
         syncLiveActivity()
     }
 
+    func selectSound(_ sound: BeatSound) throws {
+        var next = settings
+        next.sound = sound
+        try update(next)
+        guard !playing, let audio else { return }
+        try audio.preview(next, preferences)
+    }
+
     func changePreferences(_ value: MetronomePreferences) throws {
         try subscription.requireMetronomeUsage()
         var next = value
@@ -116,15 +121,25 @@ final class Metronome: ObservableObject {
         next.ghost.audible = min(64, max(1, next.ghost.audible))
         next.ghost.silent = min(64, max(1, next.ghost.silent))
 
+        var compatible = settings
+        compatible.bpm = min(range.upperBound, max(range.lowerBound, compatible.bpm))
+        compatible.beats = min(next.beatsRange.upperBound, compatible.beats)
+        try applyPreferences(next, settings: compatible)
+    }
+
+    func resetSettings() throws {
+        try subscription.requireMetronomeUsage()
+        try applyPreferences(MetronomePreferences(), settings: BeatSettings())
+        tapTempo = TapTempo()
+    }
+
+    private func applyPreferences(_ next: MetronomePreferences, settings nextSettings: BeatSettings) throws {
         if playing && preferences.mixWithOthers != next.mixWithOthers {
             try audio?.changeMixing(next.mixWithOthers)
         }
         preferences = next
         Self.write(next, key: "metronomePreferences")
-        var compatible = settings
-        compatible.bpm = min(range.upperBound, max(range.lowerBound, compatible.bpm))
-        compatible.beats = min(preferences.beatsRange.upperBound, compatible.beats)
-        if compatible != settings { save(compatible) }
+        if nextSettings != settings { save(nextSettings) }
         audio?.configure(settings, preferences)
         updateScreenPolicy()
         syncLiveActivity()
@@ -190,6 +205,8 @@ final class Metronome: ObservableObject {
         if foreground {
             if playing { recoverAudio() }
             syncLiveActivity()
+        } else {
+            audio?.stopPreview()
         }
     }
 

@@ -6,6 +6,14 @@
 #include <string.h>
 
 enum { eventCount = 128, voiceFrames = 24000, maxBeats = 32 };
+
+// These IDs match BeatSound's persisted values. The voice slot holds its wood fallback.
+enum {
+    soundMechanical = 0, soundElectronic = 1, soundWood = 2, soundVoice = 3,
+    soundBell = 4, soundSoftTap = 5, soundShortDrum = 6, soundCount = 7
+};
+
+static const double twoPi = 6.283185307179586;
 _Static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "64-bit atomics must be lock-free");
 typedef atomic_ullong AtomicWord;
 
@@ -29,12 +37,12 @@ struct MetronomeRenderer {
     AtomicWord published;
     AtomicWord voiceCounts[maxBeats];
     uint64_t applied, serial, bar, frame, trainerFirstBar;
-    uint32_t beat, tempo, pulse, toneFrames;
+    uint32_t beat, tempo, pulse, toneFrames, beatSound;
     double sampleRate, nextBeat, beatStart, beatDuration;
-    bool ghost;
+    bool ghost, previewing;
     MetronomeRenderSettings settings;
     Click primary, secondary;
-    float tones[3][3][4096];
+    float tones[soundCount][3][4096];
     float voices[maxBeats][voiceFrames];
 };
 
@@ -112,6 +120,76 @@ static void read_settings(MetronomeRenderer *r) {
     r->applied = sequence;
 }
 
+static double tone_sample(int sound, int accent, double t) {
+    const double tuning = 1.0 - accent * 0.14;
+    const double base = twoPi * t * tuning;
+    double wave, attack, duration;
+
+    switch (sound) {
+        case soundMechanical:
+            wave = (sin(base * 1570) + 0.38 * sin(base * 2790)) * exp(-t * 150);
+            return wave * fmin(1, t * 3600);
+        case soundWood:
+        case soundVoice:
+            wave = (sin(base * 830) + 0.25 * sin(base * 2300))
+                * exp(-t * 175);
+            return wave * fmin(1, t * 3600);
+        case soundElectronic: {
+            const double phase = base * 1560;
+            wave = (sin(phase) + 0.20 * sin(2 * phase) + 0.12 * sin(3 * phase)) * exp(-t * 22);
+            attack = 0.001;
+            duration = 0.038;
+            break;
+        }
+        case soundBell:
+            if (accent == 2) {
+                wave = (sin(base * 1570) + 0.38 * sin(base * 2790)) * exp(-t * 150);
+                attack = 1.0 / 3600;
+                duration = 0.030;
+            } else {
+                const double phase = twoPi * t * (accent == 0 ? 1.0 : 0.90);
+                wave = sin(phase * 1860) * exp(-t * 78)
+                    + 0.38 * sin(phase * 2795) * exp(-t * 135)
+                    + 0.13 * sin(phase * 4160) * exp(-t * 210);
+                attack = 0.0006;
+                duration = 0.045;
+            }
+            break;
+        case soundSoftTap:
+            wave = (sin(base * 820) + 0.22 * sin(base * 1260)) * exp(-t * 205);
+            attack = 0.002;
+            duration = 0.021;
+            break;
+        case soundShortDrum: {
+            // The pitch falls during the strike. Upper modes keep it audible on small speakers.
+            const double phase = twoPi * tuning * (360 * t + 1.1 * (1 - exp(-t * 185)));
+            wave = sin(phase) * exp(-t * 120)
+                + 0.49 * sin(phase * 1.86) * exp(-t * 145)
+                + 0.20 * sin(phase * 3.1) * exp(-t * 230);
+            attack = 0.001;
+            duration = 0.038;
+            break;
+        }
+        default:
+            return 0;
+    }
+
+    const double release = fmax(0, fmin(1, (duration - t) / 0.006));
+    return wave * fmin(1, t / attack) * release * release * (3 - 2 * release);
+}
+
+static void fill_tone(const MetronomeRenderer *r, float *samples, int sound, int accent) {
+    float peak = 0;
+    for (uint32_t i = 0; i < r->toneFrames; ++i) {
+        samples[i] = (float)tone_sample(sound, accent, i / r->sampleRate);
+        peak = fmaxf(peak, fabsf(samples[i]));
+    }
+    if (peak > 0) {
+        const float scale = 0.98f / peak;
+        for (uint32_t i = 0; i < r->toneFrames; ++i) samples[i] *= scale;
+    }
+}
+
 MetronomeRenderer *metronome_create(double sampleRate) {
     if (sampleRate <= 0) return NULL;
     MetronomeRenderer *r = calloc(1, sizeof(*r));
@@ -132,31 +210,9 @@ MetronomeRenderer *metronome_create(double sampleRate) {
     for (int i = 0; i < maxBeats; ++i) atomic_init(&r->voiceCounts[i], 0);
     r->settings = (MetronomeRenderSettings){.bpm = 120, .beats = 4, .volume = 1, .accents = 0xa8};
     r->toneFrames = (uint32_t)fmin(4096, sampleRate * 0.065);
-    static const double accentTuning[] = {1.0, 0.80, 0.64};
-    for (int sound = 0; sound < 3; ++sound) {
+    for (int sound = 0; sound < soundCount; ++sound) {
         for (int accent = 0; accent < 3; ++accent) {
-            const double tuning = accentTuning[accent];
-            float peak = 0;
-            for (uint32_t i = 0; i < r->toneFrames; ++i) {
-                double t = i / sampleRate;
-                double base = 6.283185307179586 * t * tuning;
-                double sample;
-                if (sound == 0) {
-                    sample = sin(base * 1570) + 0.38 * sin(base * 2790);
-                    sample *= exp(-t * 150);
-                } else if (sound == 1) {
-                    sample = sin(base * 980) * exp(-t * 88);
-                } else {
-                    sample = (sin(base * 830) + 0.25 * sin(base * 2300)) * exp(-t * 175);
-                }
-                const float value = (float)(sample * fmin(1, t * 3600));
-                r->tones[sound][accent][i] = value;
-                peak = fmaxf(peak, fabsf(value));
-            }
-            if (peak > 0) {
-                const float scale = 0.98f / peak;
-                for (uint32_t i = 0; i < r->toneFrames; ++i) r->tones[sound][accent][i] *= scale;
-            }
+            fill_tone(r, r->tones[sound][accent], sound, accent);
         }
     }
     return r;
@@ -167,7 +223,7 @@ void metronome_destroy(MetronomeRenderer *r) { free(r); }
 void metronome_reset(MetronomeRenderer *r) {
     r->bar = r->frame = r->trainerFirstBar = 0;
     r->beat = r->tempo = r->pulse = 0;
-    r->ghost = false;
+    r->ghost = r->previewing = false;
     r->nextBeat = r->beatStart = r->beatDuration = 0;
     r->primary = r->secondary = (Click){0};
     atomic_store(&r->published, 0);
@@ -232,14 +288,24 @@ static uint32_t trained_tempo(MetronomeRenderer *r) {
 }
 
 static Click click(MetronomeRenderer *r, uint32_t sound, uint32_t accent, uint32_t beat, bool subdivision) {
-    static const float accentGains[] = {1.0f, 0.72f, 0.50f};
-    const float gain = subdivision ? 0.34f : accentGains[accent];
-    if (sound == 3 && !subdivision) {
+    static const float accentGains[] = {1.0f, 0.88f, 0.75f};
+    const float gain = subdivision ? 0.50f : accentGains[accent];
+    if (sound == soundVoice && !subdivision) {
         uint32_t count = (uint32_t)atomic_load(&r->voiceCounts[beat]);
         if (count) return (Click){r->voices[beat], count, 0, gain};
     }
-    if (sound > 2) sound = 2;
+    if (sound >= soundCount) sound = soundVoice;
+    if (sound == soundBell && (subdivision || beat != 0)) accent = 2;
     return (Click){r->tones[sound][accent], r->toneFrames, 0, gain};
+}
+
+uint32_t metronome_prepare_preview(MetronomeRenderer *r) {
+    metronome_reset(r);
+    read_settings(r);
+    const uint32_t sound = r->settings.sound;
+    r->primary = click(r, sound, sound == soundBell ? 0 : 2, 0, false);
+    r->previewing = true;
+    return r->primary.count;
 }
 
 static float sample(Click *click) {
@@ -260,6 +326,14 @@ void metronome_render(MetronomeRenderer *r, float *left, float *right, uint32_t 
     const MetronomeRenderSettings *s = &r->settings;
     const float leftGain = s->volume * (s->balance > 0 ? 1 - s->balance : 1);
     const float rightGain = s->volume * (s->balance < 0 ? 1 + s->balance : 1);
+    if (r->previewing) {
+        for (uint32_t i = 0; i < frames; ++i) {
+            const float value = sample(&r->primary);
+            left[i] = value * leftGain;
+            right[i] = value * rightGain;
+        }
+        return;
+    }
     for (uint32_t i = 0; i < frames; ++i, ++r->frame) {
         double frame = (double)r->frame;
         if (frame >= r->nextBeat) {
@@ -272,7 +346,8 @@ void metronome_render(MetronomeRenderer *r, float *left, float *right, uint32_t 
             if (r->beat == 0) r->ghost = cycle && (r->bar % cycle) >= s->audibleBars;
             uint32_t accent = (uint32_t)(s->accents >> (r->beat * 2)) & 3;
             bool audible = !r->ghost && accent < 3;
-            r->primary = audible ? click(r, s->sound, accent, r->beat, false) : (Click){0};
+            r->beatSound = s->sound;
+            r->primary = audible ? click(r, r->beatSound, accent, r->beat, false) : (Click){0};
             r->secondary = (Click){0};
             publish(r, host < 0 ? -1 : host + i / r->sampleRate, r->beat, accent, audible);
             if (++r->beat == s->beats) {
@@ -284,7 +359,7 @@ void metronome_render(MetronomeRenderer *r, float *left, float *right, uint32_t 
             if (offset < 1 && frame >= r->beatStart + offset * r->beatDuration) {
                 uint32_t prior = r->beat ? r->beat - 1 : s->beats - 1;
                 uint32_t accent = (uint32_t)(s->accents >> (prior * 2)) & 3;
-                if (!r->ghost && accent < 3) r->secondary = click(r, s->sound, 2, prior, true);
+                if (!r->ghost && accent < 3) r->secondary = click(r, r->beatSound, 2, prior, true);
                 ++r->pulse;
             }
         }

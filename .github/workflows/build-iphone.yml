@@ -3,114 +3,46 @@
 on:
   workflow_dispatch:
     inputs:
-      source_sha:
-        description: Exact reviewed main commit, for a release handoff
-        type: string
-      recipient:
-        description: One-time public encryption recipient, for a release handoff
-        type: string
       build_number:
-        description: Optional TestFlight build number
-        type: string
-      release_sequence:
-        description: Private release run number, for automatic versioning
+        required: true
         type: string
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    if: github.ref == 'refs/heads/main'
+  device-build:
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 16
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          ref: ${{ inputs.source_sha || github.sha }}
-
-      - name: Compile the app and Live Activity extension
+      - name: Compile iOS Release
         env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          RECIPIENT: ${{ inputs.recipient }}
           BUILD_NUMBER: ${{ inputs.build_number }}
-          RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
         run: |
           set -euo pipefail
-          xcodebuild -version
-          build_settings=()
-          if [[ -n "$SOURCE_SHA" || -n "$RECIPIENT" ]]; then
-            [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]] || { echo 'Public main changed during dispatch'; exit 1; }
-          fi
-          if [[ -n "$RECIPIENT" ]]; then
-            [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]] || { echo 'Invalid encryption recipient'; exit 1; }
-            if [[ -z "$BUILD_NUMBER" ]]; then
-              [[ "$RELEASE_SEQUENCE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid release sequence'; exit 1; }
-              base=$(sed -nE 's/^[[:space:]]*CURRENT_PROJECT_VERSION = ([0-9]+);/\1/p' PianoMetronome.xcodeproj/project.pbxproj | sort -un | tail -n 1)
-              [[ "$base" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid project build number'; exit 1; }
-              BUILD_NUMBER=$((base + RELEASE_SEQUENCE))
-            fi
-          fi
-          if [[ -n "$BUILD_NUMBER" ]]; then
-            [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
-            build_settings=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
-          fi
-          xcodebuild \
-            -project PianoMetronome.xcodeproj \
-            -scheme PianoMetronome \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/MetronomeBuild" \
-            CODE_SIGNING_ALLOWED=NO ${build_settings[@]+"${build_settings[@]}"} build
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
+          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,7}$ ]]
+          xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/metronome-derived" CODE_SIGNING_ALLOWED=NO \
+            "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" build
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/metronome-derived/Build/Products/Release-iphoneos/PianoMetronome.app"
           test -x "$app/PianoMetronome"
           test -x "$app/PlugIns/MetronomeActivity.appex/MetronomeActivity"
-
-      - name: Encrypt compiled IPA for Windows
-        if: ${{ inputs.recipient != '' }}
-        env:
-          RECIPIENT: ${{ inputs.recipient }}
-        run: |
-          set -euo pipefail
-          transport=$(mktemp -d "$RUNNER_TEMP/metronome-transport.XXXXXX")
-          trap 'rm -rf "$transport"' EXIT
-          tgz="$transport/age.tar.gz"
-          curl -fsSL --retry 3 -o "$tgz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
-          printf '%s  %s\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 "$tgz" | shasum -a 256 --check
-          tar -xzf "$tgz" -C "$transport" age/age
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          mkdir "$transport/Payload"
-          ditto "$app" "$transport/Payload/PianoMetronome.app"
-          cd "$transport"
+          mkdir -p "$RUNNER_TEMP/metronome-device/Payload"
+          cd "$RUNNER_TEMP/metronome-device"
+          ditto "$app" Payload/PianoMetronome.app
           zip -qr unsigned.ipa Payload
           unzip -tq unsigned.ipa
-          "$transport/age/age" --encrypt --recipient "$RECIPIENT" --output "$RUNNER_TEMP/metronome-build.age" unsigned.ipa
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ inputs.recipient != '' }}
-        with:
-          name: metronome-encrypted-build
-          path: ${{ runner.temp }}/metronome-build.age
-          compression-level: 0
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Package the unsigned IPA
-        if: ${{ inputs.recipient == '' }}
-        run: |
-          set -euo pipefail
-          stage="$RUNNER_TEMP/MetronomeIPA"
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          mkdir -p "$stage/Payload"
-          ditto "$app" "$stage/Payload/PianoMetronome.app"
-          cd "$stage"
-          zip -qr ByteReset-Metronome-unsigned.ipa Payload
-          unzip -tq ByteReset-Metronome-unsigned.ipa
-
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: ${{ inputs.recipient == '' }}
         with:
-          name: ByteReset-Metronome-unsigned
-          path: ${{ runner.temp }}/MetronomeIPA/ByteReset-Metronome-unsigned.ipa
+          name: metronome-unsigned-device-build
+          path: ${{ runner.temp }}/metronome-device/unsigned.ipa
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 1

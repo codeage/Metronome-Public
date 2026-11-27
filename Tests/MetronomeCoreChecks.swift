@@ -74,19 +74,16 @@ struct MetronomeCoreChecks {
         let decoded = try JSONDecoder().decode(MetronomePreset.self, from: encoded)
         precondition(decoded == preset)
         let currentPreferences = MetronomePreferences()
-        precondition(currentPreferences.volume == 1)
+        precondition(currentPreferences.volume == 1 && currentPreferences.flash)
         let data = try JSONEncoder().encode(currentPreferences)
         guard var fields = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             preconditionFailure("Expected preference fields")
         }
-        fields.removeValue(forKey: "volumeProfileVersion")
         for oldLevel in [0.8, 0.25, 0.0] {
             fields["volume"] = oldLevel
             let oldData = try JSONSerialization.data(withJSONObject: fields)
-            var migrated = try JSONDecoder().decode(MetronomePreferences.self, from: oldData)
-            precondition(migrated.migrateVolumeDefault())
-            precondition(migrated.volume == (oldLevel == 0.8 ? 1 : oldLevel))
-            precondition(!migrated.migrateVolumeDefault())
+            let migrated = try JSONDecoder().decode(MetronomePreferences.self, from: oldData)
+            precondition(migrated.volume == oldLevel)
         }
         precondition(BeatSettings(subdivision: .min).rhythm == .quarter)
         precondition(BeatSettings().bpm == 120 && BeatSettings().meter == "4/4")
@@ -216,7 +213,7 @@ struct MetronomeCoreChecks {
                 var left = Array(repeating: Float.zero, count: frames)
                 var right = left
                 metronome_render(renderer, &left, &right, UInt32(frames), 100)
-                let expected: [Float] = [0.98, 0.98 * 0.72, 0.98 * 0.50]
+                let expected: [Float] = [0.98, 0.98 * 0.88, 0.98 * 0.75]
                 for (beat, target) in expected.enumerated() {
                     let start = beat * 9_600
                     let end = start + 9_600
