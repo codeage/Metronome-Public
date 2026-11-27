@@ -267,7 +267,9 @@ private struct MetronomeView: View {
         let meterWidth = min(120, availableWidth * 0.38)
         let rhythmWidth = min(188, availableWidth * 0.52)
         let custom = String(localized: "自定义拍号")
-        let options = MeterOption.displayOrder.map(\.rawValue) + [custom]
+        let options = MeterOption.displayOrder
+            .filter { $0 != .oneFour && $0 != .fiveFour }
+            .map(\.rawValue) + [custom]
         let locked = hasAccess ? Set<String>() : Set(options.filter { !BeatSettings.freeMeters.contains($0) })
         return HStack(spacing: 0) {
             StableOptionMenu(
