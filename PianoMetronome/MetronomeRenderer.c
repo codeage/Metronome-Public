@@ -13,10 +13,6 @@ enum {
     soundBell = 4, soundSoftTap = 5, soundShortDrum = 6, soundCount = 7
 };
 
-#ifndef METRONOME_COMPARE_LONGER_CLICK
-#define METRONOME_COMPARE_LONGER_CLICK 0
-#endif
-
 static const double twoPi = 6.283185307179586;
 _Static_assert(ATOMIC_LLONG_LOCK_FREE == 2, "64-bit atomics must be lock-free");
 typedef atomic_ullong AtomicWord;
@@ -47,9 +43,6 @@ struct MetronomeRenderer {
     MetronomeRenderSettings settings;
     Click primary, secondary;
     float tones[soundCount][3][4096];
-#if METRONOME_COMPARE_LONGER_CLICK
-    float longerTones[2][4096];
-#endif
     float voices[maxBeats][voiceFrames];
 };
 
@@ -127,23 +120,22 @@ static void read_settings(MetronomeRenderer *r) {
     r->applied = sequence;
 }
 
-static double tone_sample(int sound, int accent, double t, bool longer) {
-    static const double tuning[] = {1.0, 0.80, 0.64};
-    const double base = twoPi * t * tuning[accent];
+static double tone_sample(int sound, int accent, double t) {
+    const double tuning = 1.0 - accent * 0.14;
+    const double base = twoPi * t * tuning;
     double wave, attack, duration;
 
     switch (sound) {
         case soundMechanical:
-            wave = (sin(base * 1570) + 0.38 * sin(base * 2790)) * exp(-t * (longer ? 128 : 150));
+            wave = (sin(base * 1570) + 0.38 * sin(base * 2790)) * exp(-t * 150);
             return wave * fmin(1, t * 3600);
         case soundWood:
         case soundVoice:
             wave = (sin(base * 830) + 0.25 * sin(base * 2300))
-                * exp(-t * (sound == soundWood && longer ? 150 : 175));
+                * exp(-t * 175);
             return wave * fmin(1, t * 3600);
         case soundElectronic: {
-            static const double pitches[] = {1560, 1280, 1040};
-            const double phase = twoPi * pitches[accent] * t;
+            const double phase = base * 1560;
             wave = (sin(phase) + 0.20 * sin(2 * phase) + 0.12 * sin(3 * phase)) * exp(-t * 22);
             attack = 0.001;
             duration = 0.038;
@@ -170,7 +162,7 @@ static double tone_sample(int sound, int accent, double t, bool longer) {
             break;
         case soundShortDrum: {
             // The pitch falls during the strike. Upper modes keep it audible on small speakers.
-            const double phase = twoPi * tuning[accent] * (360 * t + 1.1 * (1 - exp(-t * 185)));
+            const double phase = twoPi * tuning * (360 * t + 1.1 * (1 - exp(-t * 185)));
             wave = sin(phase) * exp(-t * 120)
                 + 0.49 * sin(phase * 1.86) * exp(-t * 145)
                 + 0.20 * sin(phase * 3.1) * exp(-t * 230);
@@ -186,10 +178,10 @@ static double tone_sample(int sound, int accent, double t, bool longer) {
     return wave * fmin(1, t / attack) * release * release * (3 - 2 * release);
 }
 
-static void fill_tone(const MetronomeRenderer *r, float *samples, int sound, int accent, bool longer) {
+static void fill_tone(const MetronomeRenderer *r, float *samples, int sound, int accent) {
     float peak = 0;
     for (uint32_t i = 0; i < r->toneFrames; ++i) {
-        samples[i] = (float)tone_sample(sound, accent, i / r->sampleRate, longer);
+        samples[i] = (float)tone_sample(sound, accent, i / r->sampleRate);
         peak = fmaxf(peak, fabsf(samples[i]));
     }
     if (peak > 0) {
@@ -220,13 +212,9 @@ MetronomeRenderer *metronome_create(double sampleRate) {
     r->toneFrames = (uint32_t)fmin(4096, sampleRate * 0.065);
     for (int sound = 0; sound < soundCount; ++sound) {
         for (int accent = 0; accent < 3; ++accent) {
-            fill_tone(r, r->tones[sound][accent], sound, accent, false);
+            fill_tone(r, r->tones[sound][accent], sound, accent);
         }
     }
-#if METRONOME_COMPARE_LONGER_CLICK
-    fill_tone(r, r->longerTones[0], soundMechanical, 2, true);
-    fill_tone(r, r->longerTones[1], soundWood, 2, true);
-#endif
     return r;
 }
 
@@ -300,15 +288,8 @@ static uint32_t trained_tempo(MetronomeRenderer *r) {
 }
 
 static Click click(MetronomeRenderer *r, uint32_t sound, uint32_t accent, uint32_t beat, bool subdivision) {
-    static const float accentGains[] = {1.0f, 0.72f, 0.50f};
-    float gain = subdivision ? 0.34f : accentGains[accent];
-    if (!subdivision && accent == 2 && (sound == soundMechanical || sound == soundWood)) {
-#if METRONOME_COMPARE_LONGER_CLICK
-        return (Click){r->longerTones[sound == soundWood], r->toneFrames, 0, gain};
-#else
-        gain = 0.57f;
-#endif
-    }
+    static const float accentGains[] = {1.0f, 0.88f, 0.75f};
+    const float gain = subdivision ? 0.50f : accentGains[accent];
     if (sound == soundVoice && !subdivision) {
         uint32_t count = (uint32_t)atomic_load(&r->voiceCounts[beat]);
         if (count) return (Click){r->voices[beat], count, 0, gain};

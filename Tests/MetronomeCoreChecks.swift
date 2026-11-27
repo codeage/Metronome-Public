@@ -74,7 +74,7 @@ struct MetronomeCoreChecks {
         let decoded = try JSONDecoder().decode(MetronomePreset.self, from: encoded)
         precondition(decoded == preset)
         let currentPreferences = MetronomePreferences()
-        precondition(currentPreferences.volume == 1)
+        precondition(currentPreferences.volume == 1 && currentPreferences.flash)
         let data = try JSONEncoder().encode(currentPreferences)
         guard var fields = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             preconditionFailure("Expected preference fields")
@@ -213,15 +213,12 @@ struct MetronomeCoreChecks {
                 var left = Array(repeating: Float.zero, count: frames)
                 var right = left
                 metronome_render(renderer, &left, &right, UInt32(frames), 100)
-                let expected: [Float] = [0.98, 0.98 * 0.72, 0.98 * 0.50]
+                let expected: [Float] = [0.98, 0.98 * 0.88, 0.98 * 0.75]
                 for (beat, target) in expected.enumerated() {
                     let start = beat * 9_600
                     let end = start + 9_600
                     let peak = left[start..<end].map { abs($0) }.max() ?? 0
-                    let baselineGain = abs(peak - target) < 0.00001
-                    let raisedWeakBeat = beat == 2 && (sound == .mechanical || sound == .wood)
-                        && abs(peak - 0.98 * 0.57) < 0.00001
-                    precondition(baselineGain || raisedWeakBeat)
+                    precondition(abs(peak - target) < 0.00001)
                 }
             }
         }

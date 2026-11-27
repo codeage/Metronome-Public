@@ -76,7 +76,7 @@ struct MetronomePreferences: Equatable, Codable, Sendable {
     var showTempoMark = false
     var keepAwake = true
     var mixWithOthers = true
-    var flash = false
+    var flash = true
     var haptics = false
     var offsetMilliseconds = 0
     var volume = 1.0

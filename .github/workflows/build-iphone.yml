@@ -15,21 +15,10 @@ jobs:
     if: github.ref == 'refs/heads/codex/metronome-audio-comparison'
     runs-on: macos-26
     timeout-minutes: 18
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: A
-            suffix: audioa
-            longer_click: 0
-          - label: B
-            suffix: audiob
-            longer_click: 1
     env:
       BUILD_NUMBER: ${{ inputs.build_number }}
-      VARIANT_LABEL: ${{ matrix.label }}
-      BUNDLE_SUFFIX: ${{ matrix.suffix }}
-      LONGER_CLICK: ${{ matrix.longer_click }}
+      VARIANT_LABEL: A
+      BUNDLE_SUFFIX: audioa
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -61,7 +50,6 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/metronome-derived" CODE_SIGNING_ALLOWED=NO \
             "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) METRONOME_AUDIO_COMPARISON' \
-            "GCC_PREPROCESSOR_DEFINITIONS=\$(inherited) METRONOME_COMPARE_LONGER_CLICK=$LONGER_CLICK" \
             -quiet build
       - name: Package standalone unsigned IPA
         run: |
@@ -96,7 +84,7 @@ jobs:
           unzip -tq unsigned.ipa
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: metronome-unsigned-audio-${{ matrix.label }}
+          name: metronome-unsigned-audio-A
           path: ${{ runner.temp }}/metronome-device/unsigned.ipa
           if-no-files-found: error
           compression-level: 0

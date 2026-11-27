@@ -103,11 +103,11 @@ struct MetronomeSettingsView: View {
         NavigationStack {
             Form {
                 audioSection
+                feedbackSection
                 latencySection
                 rangeSection
                 trainingSection
                 ghostSection
-                feedbackSection
                 Section {
                     NavigationLink("曲目预设") { MetronomePresetsView(metronome: metronome) }
                 }
