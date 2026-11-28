@@ -10,6 +10,14 @@ struct ScoreWork: Identifiable, Sendable {
     let subtitle: String
     let composer: String
     let instruments: String
+    let meter: String
+
+    var openingMeter: (beats: Int, unit: Int)? {
+        let parts = meter.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, let beats = Int(parts[0]), let unit = Int(parts[1]),
+              beats > 0, unit > 0 else { return nil }
+        return (beats, unit)
+    }
 }
 
 private actor ScoreCatalog {
@@ -38,7 +46,7 @@ private actor ScoreCatalog {
             return "% \(term)%"
         }
         return try withStatement("""
-            SELECT score_id, title, subtitle, composer, instruments
+            SELECT score_id, title, subtitle, composer, instruments, meter
             FROM scores WHERE \(filter)
             ORDER BY (search_title = ?) DESC, (search_title LIKE ?) DESC, title COLLATE NOCASE, score_id
             LIMIT 20
@@ -51,7 +59,7 @@ private actor ScoreCatalog {
                 guard result == SQLITE_ROW else { throw CatalogError.queryFailed(result) }
                 works.append(ScoreWork(id: text(0, in: statement), title: text(1, in: statement),
                                        subtitle: text(2, in: statement), composer: text(3, in: statement),
-                                       instruments: text(4, in: statement)))
+                                       instruments: text(4, in: statement), meter: text(5, in: statement)))
             }
         }
     }
@@ -181,11 +189,15 @@ struct ScoreSearchResults: View {
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     VStack(alignment: .trailing, spacing: 4) {
-                                        Image(systemName: "doc.text")
-                                        Text(verbatim: "PDF").font(.caption2)
+                                        if let meter = work.openingMeter {
+                                            Text("\(meter.beats)/\(meter.unit)")
+                                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                        }
+                                        Label("PDF", systemImage: "doc.text")
+                                            .font(.caption2)
+                                            .accessibilityHidden(true)
                                     }
                                     .foregroundStyle(MetronomePalette.cyan)
-                                    .accessibilityHidden(true)
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
@@ -277,6 +289,7 @@ struct ScorePDFSheet: View {
     @State private var timing: ScoreTiming?
     @State private var failed = false
     @State private var preparingTiming = true
+    @State private var meterError: String?
     @State private var active: Int?
     @State private var origin = 0.0
     @State private var position = 0.0
@@ -297,6 +310,8 @@ struct ScorePDFSheet: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if document != nil {
                     HStack {
+                        Text(verbatim: metronome.settings.meter)
+                            .monospacedDigit()
                         if let timing, !timing.events.isEmpty {
                             Text("\(metronome.effectiveTempo ?? metronome.settings.bpm) BPM")
                                 .monospacedDigit()
@@ -319,6 +334,15 @@ struct ScorePDFSheet: View {
                     .background(.regularMaterial)
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let meterError {
+                    Text(meterError)
+                        .font(.footnote)
+                        .frame(maxWidth: .infinity)
+                        .padding(10)
+                        .background(.regularMaterial)
+                }
+            }
             .navigationTitle(work.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -326,6 +350,7 @@ struct ScorePDFSheet: View {
             }
         }
         .task(id: work.id) { await load() }
+        .task(id: work.id) { await applyOpeningMeter() }
         .task(id: metronome.playing) {
             guard metronome.playing else {
                 origin = position
@@ -336,6 +361,23 @@ struct ScorePDFSheet: View {
                 advance()
                 do { try await Task.sleep(for: .milliseconds(24)) } catch { return }
             }
+        }
+    }
+
+    private func applyOpeningMeter() async {
+        guard let meter = work.openingMeter, work.meter != metronome.settings.meter else { return }
+        var settings = metronome.settings
+        settings.beats = meter.beats
+        settings.unit = meter.unit
+        await metronome.refreshAccessIfNeeded(for: settings)
+        guard !Task.isCancelled else { return }
+        settings = metronome.settings
+        settings.beats = meter.beats
+        settings.unit = meter.unit
+        do {
+            try metronome.update(settings)
+        } catch {
+            meterError = String(localized: "无法应用曲谱拍号 \(work.meter)。\(error.localizedDescription)")
         }
     }
 
