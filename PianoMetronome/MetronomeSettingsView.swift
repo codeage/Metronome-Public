@@ -114,6 +114,7 @@ struct MetronomeSettingsView: View {
     @ObservedObject var metronome: Metronome
     @ObservedObject private var purchases: MetronomePurchases
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(TempoTheme.storageKey) private var tempoTheme: TempoTheme = .ring
     @State private var confirmingSettingsReset = false
     @State private var showingPurchase = false
 
@@ -182,7 +183,10 @@ struct MetronomeSettingsView: View {
         .alert("恢复默认设置？", isPresented: $confirmingSettingsReset) {
             Button("取消", role: .cancel) {}
             Button("重置", role: .destructive) {
-                metronome.perform { try metronome.resetSettings() }
+                metronome.perform {
+                    try metronome.resetSettings()
+                    tempoTheme = .ring
+                }
             }
         } message: {
             Text("所有节拍器设置都将恢复默认值。已保存的曲目预设会保留。")
@@ -287,8 +291,13 @@ struct MetronomeSettingsView: View {
 
     private var feedbackSection: some View {
         Section("反馈与屏幕") {
+            Picker("主题", selection: $tempoTheme) {
+                ForEach(TempoTheme.allCases, id: \.self) { theme in
+                    Text(theme.title).tag(theme)
+                }
+            }
             Toggle("播放时保持屏幕常亮", isOn: metronome.option(\.keepAwake))
-            Toggle("圆环随拍闪烁", isOn: metronome.option(\.flash))
+            Toggle("随拍闪烁", isOn: metronome.option(\.flash))
             Toggle("节拍触觉反馈", isOn: metronome.option(\.haptics))
                 .disabled(!BeatHaptics.available)
         }
