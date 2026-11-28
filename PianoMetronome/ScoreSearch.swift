@@ -7,6 +7,7 @@ import SwiftUI
 struct ScoreWork: Identifiable, Sendable {
     let id: String
     let title: String
+    let subtitle: String
     let composer: String
     let instruments: String
 }
@@ -22,6 +23,7 @@ private actor ScoreCatalog {
     func search(_ query: String) throws -> [ScoreWork] {
         let terms = String(query.prefix(100))
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .precomposedStringWithCanonicalMapping
             .split { !$0.isLetter && !$0.isNumber }
             .prefix(8)
             .map(String.init)
@@ -30,11 +32,13 @@ private actor ScoreCatalog {
         let phrase = terms.joined(separator: " ")
         let filter = Array(repeating: "search_text LIKE ?", count: terms.count).joined(separator: " AND ")
         let matches = terms.map { term in
-            if term.range(of: #"\p{Han}"#, options: .regularExpression) != nil { return "%\(term)%" }
+            if term.range(of: #"[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]"#, options: .regularExpression) != nil {
+                return "%\(term)%"
+            }
             return "% \(term)%"
         }
         return try withStatement("""
-            SELECT score_id, title, composer, instruments
+            SELECT score_id, title, subtitle, composer, instruments
             FROM scores WHERE \(filter)
             ORDER BY (search_title = ?) DESC, (search_title LIKE ?) DESC, title COLLATE NOCASE, score_id
             LIMIT 20
@@ -46,7 +50,8 @@ private actor ScoreCatalog {
                 if result == SQLITE_DONE { return works }
                 guard result == SQLITE_ROW else { throw CatalogError.queryFailed(result) }
                 works.append(ScoreWork(id: text(0, in: statement), title: text(1, in: statement),
-                                       composer: text(2, in: statement), instruments: text(3, in: statement)))
+                                       subtitle: text(2, in: statement), composer: text(3, in: statement),
+                                       instruments: text(4, in: statement)))
             }
         }
     }
@@ -153,6 +158,12 @@ struct ScoreSearchResults: View {
                                 HStack(spacing: 10) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(work.title).font(.subheadline.weight(.semibold))
+                                        if !work.subtitle.isEmpty {
+                                            Text(verbatim: work.subtitle)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(2)
+                                        }
                                         if !work.composer.isEmpty {
                                             Text(work.composer)
                                                 .font(.caption)
