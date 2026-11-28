@@ -479,7 +479,7 @@ private struct ScorePDFView: UIViewRepresentable {
             guard let page = view.page(for: touch, nearest: false) else { return }
             let pageIndex = document.index(for: page)
             let point = view.convert(touch, to: page)
-            var closest: (index: Int, distance: Double)?
+            var closest: (index: Int, distance: CGFloat)?
             for (index, event) in timing.events.enumerated() {
                 for note in event.notes where note.page == pageIndex {
                     let rectangle = note.bounds(on: page)
