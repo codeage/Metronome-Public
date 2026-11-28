@@ -12,16 +12,22 @@ struct PianoMetronomeApp: App {
     @State private var availableUpdate: MetronomeUpdate?
     @AppStorage("pdmxServerOverride") private var pdmxServerOverride = ""
 
+    private var scoreEndpoint: ScoreEndpoint {
+        guard let configured = ScoreEndpoint(
+            address: Bundle.main.object(forInfoDictionaryKey: "PDMXServerURL") as? String ?? ""
+        ), !configured.isProduction else { return .production }
+        return ScoreEndpoint(address: pdmxServerOverride) ?? configured
+    }
+
     init() { MetronomeShortcuts.updateAppShortcutParameters() }
 
     var body: some Scene {
         WindowGroup {
             MetronomeView(metronome: metronome, hasAccess: purchases.hasAccess,
-                          scoreEndpoint: ScoreEndpoint(address: pdmxServerOverride)
-                              ?? ScoreEndpoint(address: Bundle.main.object(forInfoDictionaryKey: "PDMXServerURL") as? String ?? ""))
+                          scoreEndpoint: scoreEndpoint)
             .onOpenURL { url in
                 if let endpoint = ScoreEndpoint(connectionURL: url) {
-                    pdmxServerOverride = endpoint.baseURL.absoluteString
+                    if !scoreEndpoint.isProduction { pdmxServerOverride = endpoint.baseURL.absoluteString }
                 } else {
                     Task { await metronome.handle(url) }
                 }

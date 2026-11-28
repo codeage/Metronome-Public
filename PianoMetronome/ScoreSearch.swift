@@ -28,7 +28,7 @@ private actor ScoreCatalog {
         case queryFailed(Int32)
     }
 
-    func search(_ query: String) throws -> [ScoreWork] {
+    func search(_ query: String, publishedOnly: Bool = false) throws -> [ScoreWork] {
         let terms = String(query.prefix(100))
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .precomposedStringWithCanonicalMapping
@@ -39,6 +39,7 @@ private actor ScoreCatalog {
 
         let phrase = terms.joined(separator: " ")
         let filter = Array(repeating: "search_text LIKE ?", count: terms.count).joined(separator: " AND ")
+        let availability = publishedOnly ? " AND score_id IN (SELECT score_id FROM published_scores)" : ""
         let matches = terms.map { term in
             if term.range(of: #"[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]"#, options: .regularExpression) != nil {
                 return "%\(term)%"
@@ -47,7 +48,7 @@ private actor ScoreCatalog {
         }
         return try withStatement("""
             SELECT score_id, title, subtitle, composer, instruments, meter
-            FROM scores WHERE \(filter)
+            FROM scores WHERE \(filter)\(availability)
             ORDER BY (search_title = ?) DESC, (search_title LIKE ?) DESC, title COLLATE NOCASE, score_id
             LIMIT 20
             """, bindings: matches + [phrase, phrase + "%"]) { statement in
@@ -94,14 +95,22 @@ private actor ScoreCatalog {
 }
 
 struct ScoreEndpoint: Sendable {
+    static let production = ScoreEndpoint(address: "https://bytereset.com/metronome/scores/v1/")!
     let baseURL: URL
+    var isProduction: Bool { baseURL.scheme == "https" }
 
     init?(address: String) {
-        guard let parts = URLComponents(string: address), parts.scheme == "http",
+        guard let parts = URLComponents(string: address),
               parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
-              let host = parts.host, let port = parts.port, (1...65_535).contains(port),
-              parts.percentEncodedPath.range(of: #"^/s/[A-Za-z0-9_-]{24}/$"#, options: .regularExpression) != nil,
-              let url = parts.url else { return nil }
+              let host = parts.host, let url = parts.url else { return nil }
+        if parts.scheme == "https", host == "bytereset.com", parts.port == nil,
+           parts.percentEncodedPath == "/metronome/scores/v1/" {
+            baseURL = url
+            return
+        }
+        guard parts.scheme == "http", let port = parts.port, (1...65_535).contains(port),
+              parts.percentEncodedPath.range(of: #"^/s/[A-Za-z0-9_-]{24}/$"#, options: .regularExpression) != nil
+        else { return nil }
         let components = host.split(separator: ".", omittingEmptySubsequences: false)
         let octets = components.compactMap { UInt8($0) }
         guard components.count == 4, octets.count == 4,
@@ -223,10 +232,12 @@ struct ScoreSearchResults: View {
         } message: {
             Text("在 Safari 打开 Windows 曲库链接，然后点「在 Metronome 中连接这个曲库」。")
         }
-        .task(id: query) {
+        .task(id: [query, endpoint?.baseURL.absoluteString ?? ""]) {
             do {
                 try await Task.sleep(for: .milliseconds(120))
-                let found = try await ScoreCatalog.shared.search(query.trimmingCharacters(in: .whitespacesAndNewlines))
+                let found = try await ScoreCatalog.shared.search(
+                    query.trimmingCharacters(in: .whitespacesAndNewlines), publishedOnly: endpoint?.isProduction == true
+                )
                 try Task.checkCancellation()
                 works = found
                 failed = false
