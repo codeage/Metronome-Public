@@ -1,18 +1,18 @@
 ﻿{
   "sourceLanguage": "zh-Hans",
   "strings": {
-    "没有找到可直接打开的钢琴谱 PDF。": {
+    "未找到可直接打开的钢琴谱": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No piano score PDF is available to open directly."
+            "value": "No piano score available to open directly."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "找不到可直接開啟的鋼琴譜 PDF。"
+            "value": "找不到可直接開啟的鋼琴譜"
           }
         }
       }
