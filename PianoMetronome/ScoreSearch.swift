@@ -1,5 +1,4 @@
-﻿import PDFKit
-import SQLite3
+﻿import SQLite3
 import SwiftUI
 
 struct ScoreWork: Identifiable, Sendable {
@@ -15,7 +14,6 @@ private actor ScoreCatalog {
     private enum CatalogError: Error {
         case unavailable
         case queryFailed(Int32)
-        case missingPDF
     }
 
     func search(_ query: String) throws -> [ScoreWork] {
@@ -50,21 +48,12 @@ private actor ScoreCatalog {
         }
     }
 
-    func pdf(for id: String) throws -> Data {
-        try withStatement("SELECT content FROM score_pdf WHERE score_id = ?", bindings: [id]) { statement in
-            let status = sqlite3_step(statement)
-            if status == SQLITE_DONE { throw CatalogError.missingPDF }
-            guard status == SQLITE_ROW else { throw CatalogError.queryFailed(status) }
-            let count = Int(sqlite3_column_bytes(statement, 0))
-            guard count > 0, let bytes = sqlite3_column_blob(statement, 0) else { throw CatalogError.missingPDF }
-            return Data(bytes: bytes, count: count)
-        }
-    }
-
     private func withStatement<Result>(_ sql: String, bindings: [String],
                                        read: (OpaquePointer) throws -> Result) throws -> Result {
         try Task.checkCancellation()
-        let url = URL.documentsDirectory.appending(path: "PDMXScoreCatalog.sqlite")
+        guard let url = Bundle.main.url(forResource: "PDMXScoreIndex", withExtension: "sqlite") else {
+            throw CatalogError.unavailable
+        }
         var database: OpaquePointer?
         let opened = sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil)
         defer { sqlite3_close(database) }
@@ -88,68 +77,44 @@ private actor ScoreCatalog {
     }
 }
 
-struct ScorePDFSheet: View {
-    let work: ScoreWork
+struct ScoreEndpoint: Sendable {
+    let baseURL: URL
 
-    @Environment(\.dismiss) private var dismiss
-    @State private var document: PDFDocument?
-    @State private var failed = false
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if let document {
-                    ScorePDFView(document: document)
-                } else if failed {
-                    ContentUnavailableView("无法打开曲谱", systemImage: "doc.badge.exclamationmark")
-                } else {
-                    ProgressView()
-                }
-            }
-            .navigationTitle(work.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
-        }
-        .task(id: work.id) {
-            do {
-                let data = try await ScoreCatalog.shared.pdf(for: work.id)
-                try Task.checkCancellation()
-                document = PDFDocument(data: data)
-                failed = document == nil
-            } catch is CancellationError {
-                return
-            } catch {
-                failed = true
-            }
-        }
-    }
-}
-
-private struct ScorePDFView: UIViewRepresentable {
-    let document: PDFDocument
-
-    func makeUIView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.displayMode = .singlePageContinuous
-        view.autoScales = true
-        view.document = document
-        return view
+    init?(address: String) {
+        guard let parts = URLComponents(string: address), parts.scheme == "http",
+              parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
+              let host = parts.host, let port = parts.port, (1...65_535).contains(port),
+              parts.percentEncodedPath.range(of: #"^/s/[A-Za-z0-9_-]{24}/$"#, options: .regularExpression) != nil,
+              let url = parts.url else { return nil }
+        let components = host.split(separator: ".", omittingEmptySubsequences: false)
+        let octets = components.compactMap { UInt8($0) }
+        guard components.count == 4, octets.count == 4,
+              octets[0] == 10 || (octets[0] == 172 && (16...31).contains(octets[1]))
+                || (octets[0] == 192 && octets[1] == 168) else { return nil }
+        baseURL = url
     }
 
-    func updateUIView(_ view: PDFView, context: Context) {
-        if view.document !== document {
-            view.document = document
-        }
+    init?(connectionURL: URL) {
+        guard let parts = URLComponents(url: connectionURL, resolvingAgainstBaseURL: false),
+              parts.scheme == "bytereset-metronome", parts.host == "catalog",
+              let address = parts.queryItems?.first(where: { $0.name == "url" })?.value else { return nil }
+        self.init(address: address)
+    }
+
+    func pdfURL(for id: String) -> URL? {
+        guard id.range(of: #"^[0-9]{1,16}$"#, options: .regularExpression) != nil else { return nil }
+        return baseURL.appending(path: "pdf", directoryHint: .isDirectory)
+            .appending(path: id + ".pdf", directoryHint: .notDirectory)
     }
 }
 
 struct ScoreSearchResults: View {
     let query: String
-    let onOpen: (ScoreWork) -> Void
+    let endpoint: ScoreEndpoint?
+    let onOpen: () -> Void
+
+    @Environment(\.openURL) private var openURL
+    @State private var needsConnection = false
 
     @State private var works: [ScoreWork] = []
     @State private var completedQuery: String?
@@ -169,7 +134,12 @@ struct ScoreSearchResults: View {
                         ForEach(works) { work in
                             if work.id != works.first?.id { Divider().padding(.horizontal, 14) }
                             Button {
-                                onOpen(work)
+                                guard let url = endpoint?.pdfURL(for: work.id) else {
+                                    needsConnection = true
+                                    return
+                                }
+                                onOpen()
+                                openURL(url)
                             } label: {
                                 HStack(spacing: 10) {
                                     VStack(alignment: .leading, spacing: 4) {
@@ -216,6 +186,11 @@ struct ScoreSearchResults: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 21))
         .overlay(RoundedRectangle(cornerRadius: 21).strokeBorder(.white.opacity(0.12)))
         .shadow(color: .black.opacity(0.3), radius: 14, y: 5)
+        .alert("连接 Windows 曲库", isPresented: $needsConnection) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text("在 Safari 打开 Windows 曲库链接，然后点「在 Metronome 中连接这个曲库」。")
+        }
         .task(id: query) {
             do {
                 try await Task.sleep(for: .milliseconds(120))

@@ -10,14 +10,21 @@ struct PianoMetronomeApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var didCheckForUpdate = false
     @State private var availableUpdate: MetronomeUpdate?
+    @AppStorage("pdmxServerOverride") private var pdmxServerOverride = ""
 
     init() { MetronomeShortcuts.updateAppShortcutParameters() }
 
     var body: some Scene {
         WindowGroup {
-            MetronomeView(metronome: metronome, hasAccess: purchases.hasAccess)
+            MetronomeView(metronome: metronome, hasAccess: purchases.hasAccess,
+                          scoreEndpoint: ScoreEndpoint(address: pdmxServerOverride)
+                              ?? ScoreEndpoint(address: Bundle.main.object(forInfoDictionaryKey: "PDMXServerURL") as? String ?? ""))
             .onOpenURL { url in
-                Task { await metronome.handle(url) }
+                if let endpoint = ScoreEndpoint(connectionURL: url) {
+                    pdmxServerOverride = endpoint.baseURL.absoluteString
+                } else {
+                    Task { await metronome.handle(url) }
+                }
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 metronome.setForeground(phase == .active)
@@ -84,23 +91,14 @@ enum MetronomePalette {
 
 @MainActor
 private struct MetronomeView: View {
-    enum Panel: Identifiable {
+    enum Panel: String, Identifiable {
         case meter, presets, settings, purchase
-        case score(ScoreWork)
-
-        var id: String {
-            switch self {
-            case .meter: "meter"
-            case .presets: "presets"
-            case .settings: "settings"
-            case .purchase: "purchase"
-            case .score(let work): "score-\(work.id)"
-            }
-        }
+        var id: Self { self }
     }
 
     @ObservedObject var metronome: Metronome
     let hasAccess: Bool
+    let scoreEndpoint: ScoreEndpoint?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -226,10 +224,7 @@ private struct MetronomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .overlay(alignment: .top) {
                 if searchFocused, !scoreQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ScoreSearchResults(query: scoreQuery) { score in
-                        searchFocused = false
-                        panel = .score(score)
-                    }
+                    ScoreSearchResults(query: scoreQuery, endpoint: scoreEndpoint) { searchFocused = false }
                         .frame(maxWidth: min(width, 440))
                         .padding(.top, 62)
                         .padding(.horizontal, 16)
@@ -249,7 +244,6 @@ private struct MetronomeView: View {
             }
         case .settings: MetronomeSettingsView(metronome: metronome)
         case .purchase: MetronomePurchaseSheet(purchases: metronome.purchases)
-        case .score(let work): ScorePDFSheet(work: work)
         }
     }
 
