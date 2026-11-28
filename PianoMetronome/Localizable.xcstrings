@@ -1,6 +1,28 @@
 ﻿{
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "支持跟谱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Score following"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持跟谱"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支援跟譜"
+          }
+        }
+      }
+    },
     "乐器未注明": {
       "localizations": {
         "en": {

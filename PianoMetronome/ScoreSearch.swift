@@ -11,6 +11,7 @@ struct ScoreWork: Identifiable, Sendable {
     let composer: String
     let instruments: String
     let meter: String
+    let supportsFollowing: Bool
 
     var openingMeter: (beats: Int, unit: Int)? {
         let parts = meter.split(separator: "/", omittingEmptySubsequences: false)
@@ -39,7 +40,7 @@ private actor ScoreCatalog {
 
         let phrase = terms.joined(separator: " ")
         let filter = Array(repeating: "search_text LIKE ?", count: terms.count).joined(separator: " AND ")
-        let availability = publishedOnly ? " AND score_id IN (SELECT score_id FROM published_scores)" : ""
+        let availability = publishedOnly ? " AND published.score_id IS NOT NULL" : ""
         let matches = terms.map { term in
             if term.range(of: #"[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]"#, options: .regularExpression) != nil {
                 return "%\(term)%"
@@ -47,8 +48,10 @@ private actor ScoreCatalog {
             return "% \(term)%"
         }
         return try withStatement("""
-            SELECT score_id, title, subtitle, composer, instruments, meter
-            FROM scores WHERE \(filter)\(availability)
+            SELECT score_id, title, subtitle, composer, instruments, meter,
+                   COALESCE(published.has_timing, 0)
+            FROM scores LEFT JOIN published_scores AS published USING (score_id)
+            WHERE \(filter)\(availability)
             ORDER BY (search_title = ?) DESC, (search_title LIKE ?) DESC, title COLLATE NOCASE, score_id
             LIMIT 20
             """, bindings: matches + [phrase, phrase + "%"]) { statement in
@@ -60,7 +63,8 @@ private actor ScoreCatalog {
                 guard result == SQLITE_ROW else { throw CatalogError.queryFailed(result) }
                 works.append(ScoreWork(id: text(0, in: statement), title: text(1, in: statement),
                                        subtitle: text(2, in: statement), composer: text(3, in: statement),
-                                       instruments: text(4, in: statement), meter: text(5, in: statement)))
+                                       instruments: text(4, in: statement), meter: text(5, in: statement),
+                                       supportsFollowing: sqlite3_column_int(statement, 6) != 0))
             }
         }
     }
@@ -201,6 +205,13 @@ struct ScoreSearchResults: View {
                                         if let meter = work.openingMeter {
                                             Text("\(meter.beats)/\(meter.unit)")
                                                 .font(.subheadline.weight(.semibold).monospacedDigit())
+                                        }
+                                        if work.supportsFollowing {
+                                            Text("支持跟谱")
+                                                .font(.caption2.weight(.semibold))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background(MetronomePalette.cyan.opacity(0.13), in: Capsule())
                                         }
                                         Label("PDF", systemImage: "doc.text")
                                             .font(.caption2)
