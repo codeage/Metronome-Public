@@ -17,6 +17,17 @@
         <key>CFBundleURLSchemes</key><array><string>bytereset-metronome</string></array>
     </dict></array>
     <key>LSRequiresIPhoneOS</key><true/>
+    <key>NSLocalNetworkUsageDescription</key><string>用于从局域网中的 Windows 曲库读取曲谱。</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key><true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>192.168.0.0/16</key><dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+            <key>10.0.0.0/8</key><dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+            <key>172.16.0.0/12</key><dict><key>NSExceptionAllowsInsecureHTTPLoads</key><true/></dict>
+        </dict>
+    </dict>
     <key>NSSupportsLiveActivities</key><true/>
     <key>UIBackgroundModes</key><array><string>audio</string></array>
     <key>UILaunchStoryboardName</key><string>LaunchScreen</string>

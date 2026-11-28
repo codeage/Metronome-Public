@@ -91,9 +91,19 @@ enum MetronomePalette {
 
 @MainActor
 private struct MetronomeView: View {
-    enum Panel: String, Identifiable {
+    enum Panel: Identifiable {
         case meter, presets, settings, purchase
-        var id: Self { self }
+        case score(ScoreWork, ScoreEndpoint)
+
+        var id: String {
+            switch self {
+            case .meter: "meter"
+            case .presets: "presets"
+            case .settings: "settings"
+            case .purchase: "purchase"
+            case .score(let work, _): "score-\(work.id)"
+            }
+        }
     }
 
     @ObservedObject var metronome: Metronome
@@ -224,7 +234,10 @@ private struct MetronomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .overlay(alignment: .top) {
                 if searchFocused, !scoreQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ScoreSearchResults(query: scoreQuery, endpoint: scoreEndpoint) { searchFocused = false }
+                    ScoreSearchResults(query: scoreQuery, endpoint: scoreEndpoint) { work, endpoint in
+                        searchFocused = false
+                        panel = .score(work, endpoint)
+                    }
                         .frame(maxWidth: min(width, 440))
                         .padding(.top, 62)
                         .padding(.horizontal, 16)
@@ -244,6 +257,7 @@ private struct MetronomeView: View {
             }
         case .settings: MetronomeSettingsView(metronome: metronome)
         case .purchase: MetronomePurchaseSheet(purchases: metronome.purchases)
+        case .score(let work, let endpoint): ScorePDFSheet(work: work, endpoint: endpoint, metronome: metronome)
         }
     }
 

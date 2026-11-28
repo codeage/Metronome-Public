@@ -285,6 +285,15 @@ final class Metronome: ObservableObject {
         }
     }
 
+    func scoreBeatClock() -> (serial: UInt64, fraction: Double)? {
+        guard playing else { return nil }
+        let latency = outputLatency + Double(preferences.offsetMilliseconds) / 1_000
+        let target = CACurrentMediaTime() - latency
+        guard let event = audio?.event(at: target), event.bpm > 0 else { return nil }
+        let fraction = min(1, max(0, (target - event.hostSeconds) * Double(event.bpm) / 60))
+        return (event.serial, fraction)
+    }
+
     private func renderDisplay(at target: TimeInterval) {
         let latency = outputLatency + Double(preferences.offsetMilliseconds) / 1_000
         let audioTarget = target - latency
