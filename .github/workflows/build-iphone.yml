@@ -1,116 +1,78 @@
-﻿name: Build Metronome for iOS
+name: Verify offline score catalog
 
 on:
   workflow_dispatch:
     inputs:
-      source_sha:
-        description: Exact reviewed main commit, for a release handoff
-        type: string
-      recipient:
-        description: One-time public encryption recipient, for a release handoff
-        type: string
       build_number:
-        description: Optional TestFlight build number
-        type: string
-      release_sequence:
-        description: Private release run number, for automatic versioning
+        required: false
         type: string
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    if: github.ref == 'refs/heads/main'
+  test:
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          ref: ${{ inputs.source_sha || github.sha }}
-
-      - name: Compile the app and Live Activity extension
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          RECIPIENT: ${{ inputs.recipient }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
-          RELEASE_SEQUENCE: ${{ inputs.release_sequence }}
+      - name: Exercise the published search and PDF loader
         run: |
           set -euo pipefail
-          xcodebuild -version
-          build_settings=()
-          if [[ -n "$SOURCE_SHA" || -n "$RECIPIENT" ]]; then
-            [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]] || { echo 'Public main changed during dispatch'; exit 1; }
-          fi
-          if [[ -n "$RECIPIENT" ]]; then
-            [[ "$RECIPIENT" =~ ^age1[0-9a-z]{58}$ ]] || { echo 'Invalid encryption recipient'; exit 1; }
-            if [[ -z "$BUILD_NUMBER" ]]; then
-              [[ "$RELEASE_SEQUENCE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid release sequence'; exit 1; }
-              base=$(sed -nE 's/^[[:space:]]*CURRENT_PROJECT_VERSION = ([0-9]+);/\1/p' PianoMetronome.xcodeproj/project.pbxproj | sort -un | tail -n 1)
-              [[ "$base" =~ ^[1-9][0-9]{0,8}$ ]] || { echo 'Invalid project build number'; exit 1; }
-              BUILD_NUMBER=$((base + RELEASE_SEQUENCE))
-            fi
-          fi
-          if [[ -n "$BUILD_NUMBER" ]]; then
-            [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,17}$ ]] || { echo 'Invalid build number'; exit 1; }
-            build_settings=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
-          fi
-          xcodebuild \
-            -project PianoMetronome.xcodeproj \
-            -scheme PianoMetronome \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/MetronomeBuild" \
-            CODE_SIGNING_ALLOWED=NO ${build_settings[@]+"${build_settings[@]}"} build
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          test -x "$app/PianoMetronome"
-          test -x "$app/PlugIns/MetronomeActivity.appex/MetronomeActivity"
-
-      - name: Encrypt compiled IPA for Windows
-        if: ${{ inputs.recipient != '' }}
-        env:
-          RECIPIENT: ${{ inputs.recipient }}
+          python3 - <<'PY'
+          import os, sqlite3
+          from pathlib import Path
+          temp = Path(os.environ['RUNNER_TEMP'])
+          db = temp/'score-fixture.sqlite'
+          c = sqlite3.connect(db)
+          c.executescript("""
+          CREATE TABLE scores(score_id,title,composer,instruments,search_title,search_text);
+          CREATE TABLE score_pdf(score_id PRIMARY KEY,content BLOB);
+          INSERT INTO scores VALUES ('12', 'Violin Sonata', 'Composer', 'Violin', 'violin sonata', ' violin sonata composer violin ');
+          INSERT INTO scores VALUES ('15', 'Piano Study', '', 'Piano', 'piano study', ' piano study piano ');
+          """)
+          parts = [b'<< /Type /Catalog /Pages 2 0 R >>', b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>', b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] >>']
+          pdf = bytearray(b'%PDF-1.4\n')
+          offsets = []
+          for number, part in enumerate(parts, 1):
+              offsets.append(len(pdf))
+              pdf += f'{number} 0 obj\n'.encode() + part + b'\nendobj\n'
+          xref = len(pdf)
+          pdf += b'xref\n0 4\n0000000000 65535 f \n'
+          for offset in offsets:
+              pdf += f'{offset:010d} 00000 n \n'.encode()
+          pdf += f'trailer\n<< /Root 1 0 R /Size 4 >>\nstartxref\n{xref}\n%%EOF\n'.encode()
+          c.execute('INSERT INTO score_pdf VALUES (?,?)', ('12',bytes(pdf)))
+          c.commit()
+          source=Path('PianoMetronome/ScoreSearch.swift').read_text(encoding='utf-8-sig').split('struct ScorePDFSheet')[0]
+          source=source.replace('URL.documentsDirectory.appending(path: "PDMXScoreCatalog.sqlite")', 'URL(fileURLWithPath: ProcessInfo.processInfo.environment["PDMX_TEST_DB"]!)')
+          source += """
+          @main struct ScoreCheck {
+              static func main() async throws {
+                  let violin = try await ScoreCatalog.shared.search("violin")
+                  precondition(violin.count == 1 && violin.first?.instruments == "Violin")
+                  let composer = try await ScoreCatalog.shared.search("sonat composer")
+                  precondition(composer.first?.id == "12")
+                  let nonexistent = try await ScoreCatalog.shared.search("no such work")
+                  precondition(nonexistent.isEmpty)
+                  let data = try await ScoreCatalog.shared.pdf(for: "12")
+                  precondition(PDFDocument(data: data)?.pageCount == 1)
+                  print("Search, instrument label and offline PDF verified")
+              }
+          }
+          """
+          (temp/'score-check.swift').write_text(source,encoding='utf-8')
+          PY
+          swiftc -swift-version 6 -parse-as-library "$RUNNER_TEMP/score-check.swift" -o "$RUNNER_TEMP/score-check"
+          PDMX_TEST_DB="$RUNNER_TEMP/score-fixture.sqlite" "$RUNNER_TEMP/score-check"
+      - name: Compile iOS app and run XCTest
         run: |
           set -euo pipefail
-          transport=$(mktemp -d "$RUNNER_TEMP/metronome-transport.XXXXXX")
-          trap 'rm -rf "$transport"' EXIT
-          tgz="$transport/age.tar.gz"
-          curl -fsSL --retry 3 -o "$tgz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-darwin-arm64.tar.gz
-          printf '%s  %s\n' e2020b073c44f692685a24d6abc378817eb81ffaaf49fd0531ef8565f767f2f5 "$tgz" | shasum -a 256 --check
-          tar -xzf "$tgz" -C "$transport" age/age
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          mkdir "$transport/Payload"
-          ditto "$app" "$transport/Payload/PianoMetronome.app"
-          cd "$transport"
-          zip -qr unsigned.ipa Payload
-          unzip -tq unsigned.ipa
-          "$transport/age/age" --encrypt --recipient "$RECIPIENT" --output "$RUNNER_TEMP/metronome-build.age" unsigned.ipa
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ inputs.recipient != '' }}
-        with:
-          name: metronome-encrypted-build
-          path: ${{ runner.temp }}/metronome-build.age
-          compression-level: 0
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Package the unsigned IPA
-        if: ${{ inputs.recipient == '' }}
-        run: |
-          set -euo pipefail
-          stage="$RUNNER_TEMP/MetronomeIPA"
-          app="$RUNNER_TEMP/MetronomeBuild/Build/Products/Release-iphoneos/PianoMetronome.app"
-          mkdir -p "$stage/Payload"
-          ditto "$app" "$stage/Payload/PianoMetronome.app"
-          cd "$stage"
-          zip -qr ByteReset-Metronome-unsigned.ipa Payload
-          unzip -tq ByteReset-Metronome-unsigned.ipa
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: ${{ inputs.recipient == '' }}
-        with:
-          name: ByteReset-Metronome-unsigned
-          path: ${{ runner.temp }}/MetronomeIPA/ByteReset-Metronome-unsigned.ipa
-          if-no-files-found: error
+          device="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; ds=[d for arr in json.load(sys.stdin)["devices"].values() for d in arr if d["name"]=="iPhone 17 Pro"]; print(ds[-1]["udid"])')"
+          xcrun simctl boot "$device"
+          xcodebuild -project PianoMetronome.xcodeproj -scheme PianoMetronome \
+            -configuration Debug -destination "platform=iOS Simulator,id=$device" \
+            -derivedDataPath "$RUNNER_TEMP/MetronomeSim" CODE_SIGNING_ALLOWED=NO \
+            -parallel-testing-enabled NO -quiet test
